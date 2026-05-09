@@ -1,7 +1,16 @@
 package expo.modules.googlesignin
 
+import android.app.Activity
+import android.os.Bundle
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -21,9 +30,48 @@ class ExpoGoogleSigninModule : Module() {
             hostedDomain = options.hostedDomain
         }
 
-        AsyncFunction("signIn") { _: SignInOptions ->
-            requireWebClientId()
-            throw NotImplementedException()
+        AsyncFunction("signIn") { options: SignInOptions, promise: Promise ->
+            val activity: Activity = appContext.currentActivity
+                ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no foreground activity", null)
+            val clientId = webClientId
+            if (clientId.isNullOrBlank()) {
+                return@AsyncFunction promise.reject("ERR_NOT_CONFIGURED", "configure() not called", null)
+            }
+            val playServices = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
+            if (playServices != ConnectionResult.SUCCESS) {
+                return@AsyncFunction promise.reject(
+                    "ERR_PLAY_SERVICES_UNAVAILABLE",
+                    "Google Play Services unavailable (code=$playServices)",
+                    null
+                )
+            }
+
+            val cm = CredentialManager.create(activity)
+            val builder = GetSignInWithGoogleOption.Builder(clientId)
+            options.nonce?.let { builder.setNonce(it) }
+            hostedDomain?.let { builder.setHostedDomainFilter(it) }
+            val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
+
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    val response = cm.getCredential(activity, request)
+                    val cred = response.credential
+                    if (cred !is androidx.credentials.CustomCredential ||
+                        cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                    ) {
+                        promise.reject("ERR_UNKNOWN", "unexpected credential type: ${cred.type}", null)
+                        return@launch
+                    }
+                    val google = GoogleIdTokenCredential.createFrom(cred.data)
+                    promise.resolve(buildResult(google))
+                } catch (_: GetCredentialCancellationException) {
+                    promise.reject("ERR_SIGN_IN_CANCELLED", "user cancelled", null)
+                } catch (_: NoCredentialException) {
+                    promise.reject("ERR_NO_CREDENTIAL", "no Google account available", null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_UNKNOWN", e.message ?: "signIn failed", e)
+                }
+            }
         }
 
         AsyncFunction("signOut") { promise: Promise ->
@@ -48,4 +96,20 @@ class ExpoGoogleSigninModule : Module() {
 
     private fun requireWebClientId(): String =
         webClientId?.takeIf { it.isNotBlank() } ?: throw NotConfiguredException()
+
+    private fun buildResult(c: GoogleIdTokenCredential): Bundle {
+        val sub = JwtDecoder.extractSub(c.idToken) ?: c.id
+        val user = Bundle().apply {
+            putString("id", sub)
+            putString("email", c.id)
+            putString("name", c.displayName)
+            putString("givenName", c.givenName)
+            putString("familyName", c.familyName)
+            putString("photo", c.profilePictureUri?.toString())
+        }
+        return Bundle().apply {
+            putString("idToken", c.idToken)
+            putBundle("user", user)
+        }
+    }
 }
