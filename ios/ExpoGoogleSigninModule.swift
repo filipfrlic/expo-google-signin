@@ -19,7 +19,20 @@ public class ExpoGoogleSigninModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ExpoGoogleSignin")
 
-        Function("configure") { (_: ConfigureOptions) in }
+        Function("configure") { (options: ConfigureOptions) in
+            let resolvedIosClientId = options.iosClientId ?? Self.readClientIdFromPlist()
+            self.webClientId = options.webClientId
+            self.iosClientId = resolvedIosClientId
+            self.hostedDomain = options.hostedDomain
+
+            if let iosId = resolvedIosClientId {
+                GIDSignIn.sharedInstance.configuration = GIDConfiguration(
+                    clientID: iosId,
+                    serverClientID: options.webClientId,
+                    hostedDomain: options.hostedDomain
+                )
+            }
+        }
 
         AsyncFunction("signIn") { (_: SignInOptions, promise: Promise) in
             promise.reject("ERR_UNKNOWN", "not implemented yet")
@@ -32,5 +45,14 @@ public class ExpoGoogleSigninModule: Module {
         AsyncFunction("getCurrentUser") { (promise: Promise) in
             promise.reject("ERR_UNKNOWN", "not implemented yet")
         }
+    }
+
+    private static func readClientIdFromPlist() -> String? {
+        guard let url = Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist"),
+              let data = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            return nil
+        }
+        return plist["CLIENT_ID"] as? String
     }
 }
