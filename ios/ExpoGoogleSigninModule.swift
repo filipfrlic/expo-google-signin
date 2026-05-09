@@ -29,7 +29,8 @@ public class ExpoGoogleSigninModule: Module {
                 GIDSignIn.sharedInstance.configuration = GIDConfiguration(
                     clientID: iosId,
                     serverClientID: options.webClientId,
-                    hostedDomain: options.hostedDomain
+                    hostedDomain: options.hostedDomain,
+                    openIDRealm: nil
                 )
             }
         }
