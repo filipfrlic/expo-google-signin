@@ -6,12 +6,15 @@ const withGoogleSignin = (config, props) => {
         throw new Error('expo-google-signin: iosUrlScheme is required in plugin props');
     }
     return (0, config_plugins_1.withInfoPlist)(config, (cfg) => {
-        const types = cfg.modResults.CFBundleURLTypes ?? [];
-        const exists = types.some((t) => t.CFBundleURLSchemes?.includes(props.iosUrlScheme));
-        if (!exists) {
-            types.push({ CFBundleURLSchemes: [props.iosUrlScheme] });
+        const existing = cfg.modResults.CFBundleURLTypes ?? [];
+        const alreadyPresent = existing.some((t) => t.CFBundleURLSchemes?.includes(props.iosUrlScheme));
+        if (alreadyPresent) {
+            return cfg;
         }
-        cfg.modResults.CFBundleURLTypes = types;
+        cfg.modResults = {
+            ...cfg.modResults,
+            CFBundleURLTypes: [...existing, { CFBundleURLSchemes: [props.iosUrlScheme] }],
+        };
         return cfg;
     });
 };
