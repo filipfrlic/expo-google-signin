@@ -13,10 +13,10 @@ Pod::Spec.new do |s|
   s.platforms      = { :ios => '14.0' }
   s.source         = { :git => 'https://github.com/filipfrlic/expo-google-signin' }
   s.static_framework = true
-  s.swift_version  = '5.4'
+  s.swift_version  = '5.9'
 
   s.dependency 'ExpoModulesCore'
-  s.dependency 'GoogleSignIn', '~> 8.0'
+  s.dependency 'GoogleSignIn', '~> 9.0'
 
   s.source_files = '**/*.{h,m,swift}'
 end
