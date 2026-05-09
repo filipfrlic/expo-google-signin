@@ -5,6 +5,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
+    "build:plugin": "tsc -p plugin",
+    "prepare": "npm run build:plugin",
     "test": "jest"
   },
   "keywords": [
@@ -20,7 +22,7 @@
   "license": "MIT",
   "author": "Filip Frlic",
   "files": [
-    "src",
+    "src/*.ts",
     "android/src",
     "android/build.gradle",
     "ios",
