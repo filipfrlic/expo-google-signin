@@ -105,11 +105,14 @@ class ExpoGoogleSigninModule : Module() {
                 return@AsyncFunction promise.reject("ERR_NOT_CONFIGURED", "configure() not called", null)
             }
             val cm = CredentialManager.create(activity)
+            // Note: GetGoogleIdOption.Builder in googleid:1.1.1 has no setHostedDomainFilter
+            // (the method exists on GetSignInWithGoogleOption.Builder used in signIn). Silent
+            // restore relies on setFilterByAuthorizedAccounts(true) — only previously-authorized
+            // accounts are returned, so a hostedDomain-gated signIn naturally restricts this path.
             val builder = GetGoogleIdOption.Builder()
                 .setServerClientId(clientId)
                 .setFilterByAuthorizedAccounts(true)
                 .setAutoSelectEnabled(true)
-            hostedDomain?.let { builder.setHostedDomainFilter(it) }
             val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
 
             moduleScope.launch {
