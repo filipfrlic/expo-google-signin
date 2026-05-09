@@ -71,7 +71,18 @@ public class ExpoGoogleSigninModule: Module {
         }
 
         AsyncFunction("getCurrentUser") { (promise: Promise) in
-            promise.reject("ERR_UNKNOWN", "not implemented yet")
+            GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
+                if let error = error as NSError? {
+                    if error.code == GIDSignInError.hasNoAuthInKeychain.rawValue {
+                        return promise.resolve(nil)
+                    }
+                    return promise.reject("ERR_UNKNOWN", error.localizedDescription)
+                }
+                guard let user, let idToken = user.idToken?.tokenString else {
+                    return promise.resolve(nil)
+                }
+                promise.resolve(Self.buildResult(idToken: idToken, user: user))
+            }
         }
     }
 
