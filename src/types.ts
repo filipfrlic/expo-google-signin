@@ -1,5 +1,11 @@
 export type GoogleUser = {
-  /** Stable Google account identifier (the OIDC `sub` claim). */
+  /**
+   * Stable Google account identifier (the OIDC `sub` claim).
+   *
+   * On iOS this is always `GIDGoogleUser.userID`. On Android this is decoded from
+   * the ID token's `sub` claim; if decoding fails (malformed JWT — extremely rare),
+   * it falls back to the email address, which is stable but not the canonical sub.
+   */
   id: string;
   email: string;
   name: string | null;

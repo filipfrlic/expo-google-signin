@@ -35,7 +35,7 @@ public class ExpoGoogleSigninModule: Module {
         }
 
         AsyncFunction("signIn") { (options: SignInOptions, promise: Promise) in
-            guard self.webClientId != nil, GIDSignIn.sharedInstance.configuration != nil else {
+            guard GIDSignIn.sharedInstance.configuration != nil else {
                 return promise.reject("ERR_NOT_CONFIGURED", "configure() not called or iosClientId unresolved")
             }
             DispatchQueue.main.async {
@@ -57,10 +57,13 @@ public class ExpoGoogleSigninModule: Module {
                         }
                         return promise.reject("ERR_UNKNOWN", error.localizedDescription)
                     }
-                    guard let user = result?.user, let idToken = user.idToken?.tokenString else {
-                        return promise.reject("ERR_UNKNOWN", "missing idToken in successful sign-in")
+                    guard let user = result?.user,
+                          let idToken = user.idToken?.tokenString,
+                          let userId = user.userID,
+                          let email = user.profile?.email else {
+                        return promise.reject("ERR_UNKNOWN", "missing required user fields in sign-in result")
                     }
-                    promise.resolve(Self.buildResult(idToken: idToken, user: user))
+                    promise.resolve(Self.buildResult(idToken: idToken, userId: userId, email: email, user: user))
                 }
             }
         }
@@ -78,10 +81,13 @@ public class ExpoGoogleSigninModule: Module {
                     }
                     return promise.reject("ERR_UNKNOWN", error.localizedDescription)
                 }
-                guard let user, let idToken = user.idToken?.tokenString else {
+                guard let user,
+                      let idToken = user.idToken?.tokenString,
+                      let userId = user.userID,
+                      let email = user.profile?.email else {
                     return promise.resolve(nil)
                 }
-                promise.resolve(Self.buildResult(idToken: idToken, user: user))
+                promise.resolve(Self.buildResult(idToken: idToken, userId: userId, email: email, user: user))
             }
         }
     }
@@ -103,12 +109,12 @@ public class ExpoGoogleSigninModule: Module {
         return top
     }
 
-    private static func buildResult(idToken: String, user: GIDGoogleUser) -> [String: Any?] {
+    private static func buildResult(idToken: String, userId: String, email: String, user: GIDGoogleUser) -> [String: Any?] {
         return [
             "idToken": idToken,
             "user": [
-                "id": user.userID ?? "",
-                "email": user.profile?.email ?? "",
+                "id": userId,
+                "email": email,
                 "name": user.profile?.name,
                 "givenName": user.profile?.givenName,
                 "familyName": user.profile?.familyName,
