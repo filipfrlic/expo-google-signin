@@ -39,7 +39,8 @@ public class ExpoGoogleSigninModule: Module {
         }
 
         AsyncFunction("signOut") { (promise: Promise) in
-            promise.reject("ERR_UNKNOWN", "not implemented yet")
+            GIDSignIn.sharedInstance.signOut()
+            promise.resolve(nil)
         }
 
         AsyncFunction("getCurrentUser") { (promise: Promise) in
