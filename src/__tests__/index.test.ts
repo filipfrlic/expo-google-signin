@@ -63,3 +63,41 @@ describe('signOut', () => {
     });
   });
 });
+
+import { signIn } from '../index';
+
+const fakeUser = {
+  id: '1234567890',
+  email: 'jane@example.com',
+  name: 'Jane Doe',
+  givenName: 'Jane',
+  familyName: 'Doe',
+  photo: 'https://lh3.googleusercontent.com/a/photo',
+};
+
+describe('signIn', () => {
+  it('returns idToken + user from the native module', async () => {
+    native.signIn.mockResolvedValueOnce({ idToken: 'jwt.token', user: fakeUser });
+    const result = await signIn();
+    expect(result.idToken).toBe('jwt.token');
+    expect(result.user).toEqual(fakeUser);
+    expect(native.signIn).toHaveBeenCalledWith({});
+  });
+
+  it('forwards nonce when provided', async () => {
+    native.signIn.mockResolvedValueOnce({ idToken: 'jwt.token', user: fakeUser });
+    await signIn({ nonce: 'abc123' });
+    expect(native.signIn).toHaveBeenCalledWith({ nonce: 'abc123' });
+  });
+
+  it('maps cancellation to ERR_SIGN_IN_CANCELLED', async () => {
+    native.signIn.mockRejectedValueOnce({
+      code: 'ERR_SIGN_IN_CANCELLED',
+      message: 'user cancelled',
+    });
+    await expect(signIn()).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_SIGN_IN_CANCELLED',
+    });
+  });
+});

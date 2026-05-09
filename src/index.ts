@@ -1,6 +1,6 @@
 import NativeModule from './ExpoGoogleSigninModule';
 import { mapNativeError } from './errors';
-import type { ConfigureOptions } from './types';
+import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
 
 export type {
   GoogleUser,
@@ -22,6 +22,14 @@ export const configure = (options: ConfigureOptions): void => {
 export const signOut = async (): Promise<void> => {
   try {
     await NativeModule.signOut();
+  } catch (e) {
+    throw mapNativeError(e);
+  }
+};
+
+export const signIn = async (options: SignInOptions = {}): Promise<SignInResult> => {
+  try {
+    return await NativeModule.signIn(options);
   } catch (e) {
     throw mapNativeError(e);
   }
