@@ -1,0 +1,48 @@
+{
+  "name": "expo-google-signin",
+  "version": "0.1.0-alpha.0",
+  "description": "Native Google Sign-In for Expo via Android Credential Manager and iOS GoogleSignIn SDK. Free, focused, new-architecture-ready.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [
+    "expo",
+    "expo-module",
+    "google",
+    "signin",
+    "sign-in-with-google",
+    "credential-manager",
+    "auth",
+    "react-native"
+  ],
+  "license": "MIT",
+  "author": "Filip Frlic",
+  "files": [
+    "src",
+    "android/src",
+    "android/build.gradle",
+    "ios",
+    "plugin/build",
+    "expo-module.config.json",
+    "app.plugin.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.2.10",
+    "expo": "^55.0.0",
+    "expo-modules-core": "*",
+    "jest": "^29.7.0",
+    "jest-expo": "^55.0.11",
+    "typescript": "~5.9.2"
+  }
+}

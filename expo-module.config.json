@@ -1,0 +1,11 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoGoogleSigninModule"],
+    "appDelegateSubscribers": ["ExpoGoogleSigninAppDelegate"],
+    "podspecPath": "ios/ExpoGoogleSignin.podspec"
+  },
+  "android": {
+    "modules": ["expo.modules.googlesignin.ExpoGoogleSigninModule"]
+  }
+}
