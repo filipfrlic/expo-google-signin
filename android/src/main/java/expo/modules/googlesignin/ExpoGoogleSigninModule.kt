@@ -9,6 +9,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import expo.modules.kotlin.Promise
@@ -88,9 +89,39 @@ class ExpoGoogleSigninModule : Module() {
             }
         }
 
-        AsyncFunction("getCurrentUser") {
-            requireWebClientId()
-            throw NotImplementedException()
+        AsyncFunction("getCurrentUser") { promise: Promise ->
+            val activity: Activity = appContext.currentActivity
+                ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no foreground activity", null)
+            val clientId = webClientId
+            if (clientId.isNullOrBlank()) {
+                return@AsyncFunction promise.reject("ERR_NOT_CONFIGURED", "configure() not called", null)
+            }
+            val cm = CredentialManager.create(activity)
+            val builder = GetGoogleIdOption.Builder()
+                .setServerClientId(clientId)
+                .setFilterByAuthorizedAccounts(true)
+                .setAutoSelectEnabled(true)
+            hostedDomain?.let { builder.setHostedDomainFilter(it) }
+            val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
+
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    val response = cm.getCredential(activity, request)
+                    val cred = response.credential
+                    if (cred !is androidx.credentials.CustomCredential ||
+                        cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                    ) {
+                        promise.resolve(null)
+                        return@launch
+                    }
+                    val google = GoogleIdTokenCredential.createFrom(cred.data)
+                    promise.resolve(buildResult(google))
+                } catch (_: NoCredentialException) {
+                    promise.resolve(null)
+                } catch (e: Exception) {
+                    promise.reject("ERR_UNKNOWN", e.message ?: "getCurrentUser failed", e)
+                }
+            }
         }
     }
 
