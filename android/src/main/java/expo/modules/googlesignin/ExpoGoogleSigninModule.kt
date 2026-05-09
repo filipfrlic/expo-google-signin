@@ -17,14 +17,21 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class ExpoGoogleSigninModule : Module() {
+    private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var webClientId: String? = null
     private var hostedDomain: String? = null
 
     override fun definition() = ModuleDefinition {
         Name("ExpoGoogleSignin")
+
+        OnDestroy {
+            moduleScope.cancel()
+        }
 
         Function("configure") { options: ConfigureOptions ->
             webClientId = options.webClientId
@@ -53,7 +60,7 @@ class ExpoGoogleSigninModule : Module() {
             hostedDomain?.let { builder.setHostedDomainFilter(it) }
             val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
 
-            CoroutineScope(Dispatchers.Main).launch {
+            moduleScope.launch {
                 try {
                     val response = cm.getCredential(activity, request)
                     val cred = response.credential
@@ -76,10 +83,11 @@ class ExpoGoogleSigninModule : Module() {
         }
 
         AsyncFunction("signOut") { promise: Promise ->
+            // signOut works while backgrounded — Application context is sufficient for clearCredentialState (no Activity needed).
             val ctx = appContext.reactContext
                 ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no react context", null)
             val cm = CredentialManager.create(ctx)
-            CoroutineScope(Dispatchers.Main).launch {
+            moduleScope.launch {
                 try {
                     cm.clearCredentialState(ClearCredentialStateRequest())
                     promise.resolve(null)
@@ -104,7 +112,7 @@ class ExpoGoogleSigninModule : Module() {
             hostedDomain?.let { builder.setHostedDomainFilter(it) }
             val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
 
-            CoroutineScope(Dispatchers.Main).launch {
+            moduleScope.launch {
                 try {
                     val response = cm.getCredential(activity, request)
                     val cred = response.credential
@@ -116,6 +124,8 @@ class ExpoGoogleSigninModule : Module() {
                     }
                     val google = GoogleIdTokenCredential.createFrom(cred.data)
                     promise.resolve(buildResult(google))
+                } catch (_: GetCredentialCancellationException) {
+                    promise.resolve(null)
                 } catch (_: NoCredentialException) {
                     promise.resolve(null)
                 } catch (e: Exception) {
@@ -125,11 +135,9 @@ class ExpoGoogleSigninModule : Module() {
         }
     }
 
-    private fun requireWebClientId(): String =
-        webClientId?.takeIf { it.isNotBlank() } ?: throw NotConfiguredException()
-
     private fun buildResult(c: GoogleIdTokenCredential): Bundle {
         val sub = JwtDecoder.extractSub(c.idToken) ?: c.id
+        // Fallback: c.id is the email, not the OIDC sub. Used only if JWT decode fails.
         val user = Bundle().apply {
             putString("id", sub)
             putString("email", c.id)
