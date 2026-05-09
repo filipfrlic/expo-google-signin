@@ -101,3 +101,27 @@ describe('signIn', () => {
     });
   });
 });
+
+import { getCurrentUser } from '../index';
+
+describe('getCurrentUser', () => {
+  it('returns null when no cached user exists', async () => {
+    native.getCurrentUser.mockResolvedValueOnce(null);
+    const result = await getCurrentUser();
+    expect(result).toBeNull();
+  });
+
+  it('returns the user when one exists', async () => {
+    native.getCurrentUser.mockResolvedValueOnce({ idToken: 'jwt', user: fakeUser });
+    const result = await getCurrentUser();
+    expect(result).toEqual({ idToken: 'jwt', user: fakeUser });
+  });
+
+  it('maps native errors to GoogleSigninError', async () => {
+    native.getCurrentUser.mockRejectedValueOnce({ code: 'ERR_UNKNOWN', message: 'boom' });
+    await expect(getCurrentUser()).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_UNKNOWN',
+    });
+  });
+});

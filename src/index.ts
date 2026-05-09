@@ -34,3 +34,11 @@ export const signIn = async (options: SignInOptions = {}): Promise<SignInResult>
     throw mapNativeError(e);
   }
 };
+
+export const getCurrentUser = async (): Promise<SignInResult | null> => {
+  try {
+    return await NativeModule.getCurrentUser();
+  } catch (e) {
+    throw mapNativeError(e);
+  }
+};
