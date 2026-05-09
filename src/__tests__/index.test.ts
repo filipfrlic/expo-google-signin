@@ -44,3 +44,22 @@ describe('configure', () => {
     expect(() => configure({})).toThrow(/webClientId/);
   });
 });
+
+import { signOut } from '../index';
+
+describe('signOut', () => {
+  it('calls the native module', async () => {
+    native.signOut.mockResolvedValueOnce(undefined);
+    await signOut();
+    expect(native.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps native errors to GoogleSigninError', async () => {
+    native.signOut.mockRejectedValueOnce({ code: 'ERR_UNKNOWN', message: 'boom' });
+    await expect(signOut()).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_UNKNOWN',
+      message: 'boom',
+    });
+  });
+});
