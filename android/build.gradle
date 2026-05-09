@@ -1,0 +1,28 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'expo.modules.googlesignin'
+version = '0.1.0'
+
+android {
+    namespace 'expo.modules.googlesignin'
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdk 21
+        targetSdk rootProject.ext.targetSdkVersion
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    implementation 'androidx.credentials:credentials:1.3.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+    implementation 'com.google.android.gms:play-services-base:18.5.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+}
