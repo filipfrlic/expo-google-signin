@@ -2,17 +2,21 @@ package expo.modules.googlesignin
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import expo.modules.kotlin.exception.CodedException
-
-class NotImplementedException : CodedException("ERR_UNKNOWN", "not implemented yet", null)
 
 class ExpoGoogleSigninModule : Module() {
+    private var webClientId: String? = null
+    private var hostedDomain: String? = null
+
     override fun definition() = ModuleDefinition {
         Name("ExpoGoogleSignin")
 
-        Function("configure") { _: ConfigureOptions -> }
+        Function("configure") { options: ConfigureOptions ->
+            webClientId = options.webClientId
+            hostedDomain = options.hostedDomain
+        }
 
         AsyncFunction("signIn") { _: SignInOptions ->
+            requireWebClientId()
             throw NotImplementedException()
         }
 
@@ -21,7 +25,11 @@ class ExpoGoogleSigninModule : Module() {
         }
 
         AsyncFunction("getCurrentUser") {
+            requireWebClientId()
             throw NotImplementedException()
         }
     }
+
+    private fun requireWebClientId(): String =
+        webClientId?.takeIf { it.isNotBlank() } ?: throw NotConfiguredException()
 }
