@@ -39,6 +39,26 @@ configure({
 });
 ```
 
+### Getting your client IDs
+
+You'll need three values from the Google Cloud Console (`https://console.cloud.google.com/apis/credentials`):
+
+- **Web OAuth 2.0 client ID** → `webClientId`. The mint of cross-platform ID tokens. Required by both iOS and Android. Common newcomer mistake: passing the iOS client ID here — backend verification (Firebase, Supabase, custom) requires the **web** client ID.
+- **iOS OAuth 2.0 client ID** → `iosClientId`. Set in the Google Cloud Console under "iOS" credentials with your app's bundle identifier. The reversed form (`com.googleusercontent.apps.<NUMBER>-<HASH>`) becomes the `iosUrlScheme` plugin prop. If you bundle a `GoogleService-Info.plist`, this is read automatically and `iosClientId` becomes optional.
+- **Android OAuth 2.0 client ID** → not passed to the package, but **must exist in the Cloud Console** with your app's package name and the **SHA-1 fingerprint of the signing key**. Without this registration, Credential Manager will silently return no credential. Get the SHA-1 with:
+
+  ```bash
+  # debug builds (development)
+  keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+
+  # release builds (EAS / production)
+  # use eas credentials → "View signing credentials" or your own keystore
+  ```
+
+  Register every fingerprint your app might be signed with (debug, EAS internal, EAS production).
+
+The package itself does not read `google-services.json` — Android only needs the OAuth client + SHA-1 registration on the Cloud side.
+
 ## API
 
 ```ts
@@ -87,17 +107,20 @@ All thrown errors are `GoogleSigninError` instances with a typed `code`:
 ```ts
 try {
   await signIn();
-} catch (e) {
-  if (e instanceof GoogleSigninError && e.code === 'ERR_SIGN_IN_CANCELLED') return;
+} catch (e: any) {
+  // Use the typed `code` rather than `instanceof` — `code` survives every bundle/realm boundary.
+  if (e?.code === 'ERR_SIGN_IN_CANCELLED') return;
   // ...
 }
 ```
 
 ## Roadmap
 
-- v0.2 — additional OAuth scopes + `accessToken` (Drive, Calendar, etc.)
-- v0.3 — server auth code (offline access)
-- v0.4 — web support via Google Identity Services
+Possible future work, unordered:
+
+- Additional OAuth scopes + `accessToken` (Drive, Calendar, etc.)
+- Server auth code (offline access)
+- Web support via Google Identity Services
 
 ## License
 
