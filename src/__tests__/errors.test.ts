@@ -4,6 +4,7 @@ describe('GoogleSigninError', () => {
   it('exposes code and message', () => {
     const err = new GoogleSigninError('ERR_SIGN_IN_CANCELLED', 'user cancelled');
     expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(GoogleSigninError);
     expect(err.code).toBe('ERR_SIGN_IN_CANCELLED');
     expect(err.message).toBe('user cancelled');
     expect(err.name).toBe('GoogleSigninError');

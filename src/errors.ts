@@ -1,13 +1,18 @@
 import type { ErrorCode } from './types';
 
-const KNOWN_CODES: ReadonlyArray<ErrorCode> = [
+const KNOWN_CODES = [
   'ERR_SIGN_IN_CANCELLED',
   'ERR_NO_CREDENTIAL',
   'ERR_PLAY_SERVICES_UNAVAILABLE',
   'ERR_NETWORK',
   'ERR_NOT_CONFIGURED',
   'ERR_UNKNOWN',
-];
+] as const satisfies ReadonlyArray<ErrorCode>;
+
+// Compile-time exhaustiveness pin: errors if a future ErrorCode union
+// member is added without a matching entry in KNOWN_CODES.
+type _ExhaustiveErrorCodes =
+  Exclude<ErrorCode, (typeof KNOWN_CODES)[number]> extends never ? true : never;
 
 export class GoogleSigninError extends Error {
   code: ErrorCode;
