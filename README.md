@@ -1,4 +1,4 @@
-# expo-google-signin
+# @filipfrlic/expo-google-signin
 
 Native Google Sign-In for Expo. Free, focused, new-architecture-ready.
 
@@ -11,7 +11,7 @@ No paid tier, no kitchen-sink scope creep, no deprecated APIs.
 ## Install
 
 ```bash
-npx expo install expo-google-signin
+npx expo install @filipfrlic/expo-google-signin
 ```
 
 ## Configure
@@ -21,7 +21,7 @@ In `app.json` plugins:
 ```json
 {
   "plugins": [
-    ["expo-google-signin", {
+    ["@filipfrlic/expo-google-signin", {
       "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID_REVERSED"
     }]
   ]
@@ -31,7 +31,7 @@ In `app.json` plugins:
 In your app entry (e.g. `app/_layout.tsx`):
 
 ```ts
-import { configure } from 'expo-google-signin';
+import { configure } from '@filipfrlic/expo-google-signin';
 
 configure({
   webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
@@ -62,7 +62,7 @@ The package itself does not read `google-services.json` — Android only needs t
 ## API
 
 ```ts
-import { signIn, signOut, getCurrentUser, GoogleSigninError } from 'expo-google-signin';
+import { signIn, signOut, getCurrentUser, GoogleSigninError } from '@filipfrlic/expo-google-signin';
 
 // Show the system Google sign-in sheet.
 const { idToken, user } = await signIn();
