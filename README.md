@@ -1,12 +1,6 @@
 # @filipfrlic/expo-google-signin
 
-Native Google Sign-In for Expo. Free, focused, new-architecture-ready.
-
-- **Android:** Credential Manager (`androidx.credentials`) — the modern AndroidX API Google now recommends.
-- **iOS:** GoogleSignIn 9.x SDK — the official Google iOS framework.
-- **Web:** not yet (planned for v2).
-
-No paid tier, no kitchen-sink scope creep, no deprecated APIs.
+A Google Sign-In package for Expo. Uses Credential Manager on Android and Google's iOS SDK (9.x) on iOS. Works with the new architecture. No web support yet.
 
 ## Install
 
@@ -16,7 +10,7 @@ npx expo install @filipfrlic/expo-google-signin
 
 ## Configure
 
-In `app.json` plugins:
+Add the plugin to `app.json`:
 
 ```json
 {
@@ -28,53 +22,48 @@ In `app.json` plugins:
 }
 ```
 
-In your app entry (e.g. `app/_layout.tsx`):
+Call `configure` once, before any sign-in:
 
 ```ts
 import { configure } from '@filipfrlic/expo-google-signin';
 
 configure({
   webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
-  iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // optional, falls back to GoogleService-Info.plist
+  iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // optional if you bundle GoogleService-Info.plist
 });
 ```
 
-### Getting your client IDs
+### Client IDs
 
-You'll need three values from the Google Cloud Console (`https://console.cloud.google.com/apis/credentials`):
+From the [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
 
-- **Web OAuth 2.0 client ID** → `webClientId`. The mint of cross-platform ID tokens. Required by both iOS and Android. Common newcomer mistake: passing the iOS client ID here — backend verification (Firebase, Supabase, custom) requires the **web** client ID.
-- **iOS OAuth 2.0 client ID** → `iosClientId`. Set in the Google Cloud Console under "iOS" credentials with your app's bundle identifier. The reversed form (`com.googleusercontent.apps.<NUMBER>-<HASH>`) becomes the `iosUrlScheme` plugin prop. If you bundle a `GoogleService-Info.plist`, this is read automatically and `iosClientId` becomes optional.
-- **Android OAuth 2.0 client ID** → not passed to the package, but **must exist in the Cloud Console** with your app's package name and the **SHA-1 fingerprint of the signing key**. Without this registration, Credential Manager will silently return no credential. Get the SHA-1 with:
+- **Web OAuth client ID** → `webClientId`. Both iOS and Android use this to mint the ID token. Use the *web* client ID even on mobile — backends like Supabase or Firebase verify against this one.
+- **iOS OAuth client ID** → `iosClientId`. Reverse it (`com.googleusercontent.apps.<id>`) and pass that as the plugin's `iosUrlScheme`. Optional if `GoogleService-Info.plist` is bundled.
+- **Android OAuth client ID** is not passed to the package, but it must exist in the Cloud Console with your app's package name and the signing-key SHA-1. Without it, Credential Manager returns no credential and gives you no error to debug.
 
-  ```bash
-  # debug builds (development)
-  keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+Grab the SHA-1:
 
-  # release builds (EAS / production)
-  # use eas credentials → "View signing credentials" or your own keystore
-  ```
+```bash
+# debug builds
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
 
-  Register every fingerprint your app might be signed with (debug, EAS internal, EAS production).
+# EAS release builds: eas credentials → "View signing credentials"
+```
 
-The package itself does not read `google-services.json` — Android only needs the OAuth client + SHA-1 registration on the Cloud side.
+Register every fingerprint that might sign your app: debug, EAS internal, EAS production.
 
-## API
+## Usage
 
 ```ts
 import { signIn, signOut, getCurrentUser, GoogleSigninError } from '@filipfrlic/expo-google-signin';
 
-// Show the system Google sign-in sheet.
 const { idToken, user } = await signIn();
 
-// Silent restore — returns null if no authorized account is cached.
-const restored = await getCurrentUser();
-
-// Clear OS-level credential state.
+const restored = await getCurrentUser(); // null if no cached session
 await signOut();
 ```
 
-### Supabase / nonce verification
+### With Supabase
 
 ```ts
 import { sha256 } from 'js-sha256';
@@ -87,28 +76,29 @@ const { idToken } = await signIn({ nonce: hashed });
 await supabase.auth.signInWithIdToken({
   provider: 'google',
   token: idToken,
-  nonce: rawNonce, // Supabase verifies hashed(rawNonce) === idToken.nonce
+  nonce: rawNonce,
 });
 ```
 
 ## Errors
 
-All thrown errors are `GoogleSigninError` instances with a typed `code`:
+Errors thrown by this package are `GoogleSigninError` with a typed `code`:
 
-| Code | When |
+| Code | Cause |
 |---|---|
 | `ERR_SIGN_IN_CANCELLED` | User dismissed the sheet |
-| `ERR_NO_CREDENTIAL` | `signIn` on a device with no Google account |
-| `ERR_PLAY_SERVICES_UNAVAILABLE` | Android only — Play Services missing/outdated |
+| `ERR_NO_CREDENTIAL` | No Google account on the device |
+| `ERR_PLAY_SERVICES_UNAVAILABLE` | Android: Play Services missing or outdated |
 | `ERR_NETWORK` | Network failure |
 | `ERR_NOT_CONFIGURED` | `configure()` was not called |
 | `ERR_UNKNOWN` | Anything else |
+
+Branch on `code`, not `instanceof` — `instanceof` can fail across module realms (Metro bundles, hot reload, etc.):
 
 ```ts
 try {
   await signIn();
 } catch (e: any) {
-  // Use the typed `code` rather than `instanceof` — `code` survives every bundle/realm boundary.
   if (e?.code === 'ERR_SIGN_IN_CANCELLED') return;
   // ...
 }
@@ -116,11 +106,9 @@ try {
 
 ## Roadmap
 
-Possible future work, unordered:
-
-- Additional OAuth scopes + `accessToken` (Drive, Calendar, etc.)
-- Server auth code (offline access)
-- Web support via Google Identity Services
+- Additional OAuth scopes + `accessToken` for Drive/Calendar/etc.
+- Server auth code for offline access
+- Web via Google Identity Services
 
 ## License
 
