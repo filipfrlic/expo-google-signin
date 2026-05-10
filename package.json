@@ -7,7 +7,8 @@
   "scripts": {
     "build:plugin": "tsc -p plugin",
     "prepare": "npm run build:plugin",
-    "test": "jest"
+    "test": "jest",
+    "version": "node scripts/sync-gradle-version.js && git add android/build.gradle"
   },
   "keywords": [
     "expo",
