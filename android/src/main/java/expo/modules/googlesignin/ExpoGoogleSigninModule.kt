@@ -21,6 +21,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+private object Err {
+    const val SIGN_IN_CANCELLED = "ERR_SIGN_IN_CANCELLED"
+    const val NO_CREDENTIAL = "ERR_NO_CREDENTIAL"
+    const val PLAY_SERVICES_UNAVAILABLE = "ERR_PLAY_SERVICES_UNAVAILABLE"
+    const val NOT_CONFIGURED = "ERR_NOT_CONFIGURED"
+    const val UNKNOWN = "ERR_UNKNOWN"
+}
+
 class ExpoGoogleSigninModule : Module() {
     private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var webClientId: String? = null
@@ -40,15 +48,15 @@ class ExpoGoogleSigninModule : Module() {
 
         AsyncFunction("signIn") { options: SignInOptions, promise: Promise ->
             val activity: Activity = appContext.currentActivity
-                ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no foreground activity", null)
+                ?: return@AsyncFunction promise.reject(Err.UNKNOWN, "no foreground activity", null)
             val clientId = webClientId
             if (clientId.isNullOrBlank()) {
-                return@AsyncFunction promise.reject("ERR_NOT_CONFIGURED", "configure() not called", null)
+                return@AsyncFunction promise.reject(Err.NOT_CONFIGURED, "configure() not called", null)
             }
             val playServices = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
             if (playServices != ConnectionResult.SUCCESS) {
                 return@AsyncFunction promise.reject(
-                    "ERR_PLAY_SERVICES_UNAVAILABLE",
+                    Err.PLAY_SERVICES_UNAVAILABLE,
                     "Google Play Services unavailable (code=$playServices)",
                     null
                 )
@@ -67,17 +75,17 @@ class ExpoGoogleSigninModule : Module() {
                     if (cred !is androidx.credentials.CustomCredential ||
                         cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
                     ) {
-                        promise.reject("ERR_UNKNOWN", "unexpected credential type: ${cred.type}", null)
+                        promise.reject(Err.UNKNOWN, "unexpected credential type: ${cred.type}", null)
                         return@launch
                     }
                     val google = GoogleIdTokenCredential.createFrom(cred.data)
                     promise.resolve(buildResult(google))
                 } catch (_: GetCredentialCancellationException) {
-                    promise.reject("ERR_SIGN_IN_CANCELLED", "user cancelled", null)
+                    promise.reject(Err.SIGN_IN_CANCELLED, "user cancelled", null)
                 } catch (_: NoCredentialException) {
-                    promise.reject("ERR_NO_CREDENTIAL", "no Google account available", null)
+                    promise.reject(Err.NO_CREDENTIAL, "no Google account available", null)
                 } catch (e: Exception) {
-                    promise.reject("ERR_UNKNOWN", e.message ?: "signIn failed", e)
+                    promise.reject(Err.UNKNOWN, e.message ?: "signIn failed", e)
                 }
             }
         }
@@ -85,24 +93,24 @@ class ExpoGoogleSigninModule : Module() {
         AsyncFunction("signOut") { promise: Promise ->
             // signOut works while backgrounded — Application context is sufficient for clearCredentialState (no Activity needed).
             val ctx = appContext.reactContext
-                ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no react context", null)
+                ?: return@AsyncFunction promise.reject(Err.UNKNOWN, "no react context", null)
             val cm = CredentialManager.create(ctx)
             moduleScope.launch {
                 try {
                     cm.clearCredentialState(ClearCredentialStateRequest())
                     promise.resolve(null)
                 } catch (e: Exception) {
-                    promise.reject("ERR_UNKNOWN", e.message ?: "signOut failed", e)
+                    promise.reject(Err.UNKNOWN, e.message ?: "signOut failed", e)
                 }
             }
         }
 
         AsyncFunction("getCurrentUser") { promise: Promise ->
             val activity: Activity = appContext.currentActivity
-                ?: return@AsyncFunction promise.reject("ERR_UNKNOWN", "no foreground activity", null)
+                ?: return@AsyncFunction promise.reject(Err.UNKNOWN, "no foreground activity", null)
             val clientId = webClientId
             if (clientId.isNullOrBlank()) {
-                return@AsyncFunction promise.reject("ERR_NOT_CONFIGURED", "configure() not called", null)
+                return@AsyncFunction promise.reject(Err.NOT_CONFIGURED, "configure() not called", null)
             }
             val cm = CredentialManager.create(activity)
             // Note: GetGoogleIdOption.Builder in googleid:1.1.1 has no setHostedDomainFilter
@@ -132,7 +140,7 @@ class ExpoGoogleSigninModule : Module() {
                 } catch (_: NoCredentialException) {
                     promise.resolve(null)
                 } catch (e: Exception) {
-                    promise.reject("ERR_UNKNOWN", e.message ?: "getCurrentUser failed", e)
+                    promise.reject(Err.UNKNOWN, e.message ?: "getCurrentUser failed", e)
                 }
             }
         }

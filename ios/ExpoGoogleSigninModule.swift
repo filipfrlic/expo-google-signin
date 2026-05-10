@@ -11,37 +11,39 @@ struct SignInOptions: Record {
     @Field var nonce: String?
 }
 
-public class ExpoGoogleSigninModule: Module {
-    private var webClientId: String?
-    private var iosClientId: String?
-    private var hostedDomain: String?
+private enum Err {
+    static let signInCancelled = "ERR_SIGN_IN_CANCELLED"
+    static let network = "ERR_NETWORK"
+    static let notConfigured = "ERR_NOT_CONFIGURED"
+    static let unknown = "ERR_UNKNOWN"
+}
 
+public class ExpoGoogleSigninModule: Module {
     public func definition() -> ModuleDefinition {
         Name("ExpoGoogleSignin")
 
         Function("configure") { (options: ConfigureOptions) in
             let resolvedIosClientId = options.iosClientId ?? Self.readClientIdFromPlist()
-            self.webClientId = options.webClientId
-            self.iosClientId = resolvedIosClientId
-            self.hostedDomain = options.hostedDomain
-
-            if let iosId = resolvedIosClientId {
-                GIDSignIn.sharedInstance.configuration = GIDConfiguration(
-                    clientID: iosId,
-                    serverClientID: options.webClientId,
-                    hostedDomain: options.hostedDomain,
-                    openIDRealm: nil
-                )
+            guard let iosId = resolvedIosClientId else { return }
+            let config = GIDConfiguration(
+                clientID: iosId,
+                serverClientID: options.webClientId,
+                hostedDomain: options.hostedDomain,
+                openIDRealm: nil
+            )
+            // GIDSignIn.sharedInstance is read on main during signIn; assign on main to avoid a JS-thread/main-thread data race.
+            DispatchQueue.main.async {
+                GIDSignIn.sharedInstance.configuration = config
             }
         }
 
         AsyncFunction("signIn") { (options: SignInOptions, promise: Promise) in
-            guard GIDSignIn.sharedInstance.configuration != nil else {
-                return promise.reject("ERR_NOT_CONFIGURED", "configure() not called or iosClientId unresolved")
-            }
             DispatchQueue.main.async {
+                guard GIDSignIn.sharedInstance.configuration != nil else {
+                    return promise.reject(Err.notConfigured, "configure() not called or iosClientId unresolved")
+                }
                 guard let presenter = Self.topViewController() else {
-                    return promise.reject("ERR_UNKNOWN", "no presenting view controller")
+                    return promise.reject(Err.unknown, "no presenting view controller")
                 }
                 GIDSignIn.sharedInstance.signIn(
                     withPresenting: presenter,
@@ -51,18 +53,18 @@ public class ExpoGoogleSigninModule: Module {
                 ) { result, error in
                     if let error = error as NSError? {
                         if error.code == GIDSignInError.canceled.rawValue {
-                            return promise.reject("ERR_SIGN_IN_CANCELLED", "user cancelled")
+                            return promise.reject(Err.signInCancelled, "user cancelled")
                         }
                         if error.domain == NSURLErrorDomain {
-                            return promise.reject("ERR_NETWORK", error.localizedDescription)
+                            return promise.reject(Err.network, error.localizedDescription)
                         }
-                        return promise.reject("ERR_UNKNOWN", error.localizedDescription)
+                        return promise.reject(Err.unknown, error.localizedDescription)
                     }
                     guard let user = result?.user,
                           let idToken = user.idToken?.tokenString,
                           let userId = user.userID,
                           let email = user.profile?.email else {
-                        return promise.reject("ERR_UNKNOWN", "missing required user fields in sign-in result")
+                        return promise.reject(Err.unknown, "missing required user fields in sign-in result")
                     }
                     promise.resolve(Self.buildResult(idToken: idToken, userId: userId, email: email, user: user))
                 }
@@ -75,12 +77,15 @@ public class ExpoGoogleSigninModule: Module {
         }
 
         AsyncFunction("getCurrentUser") { (promise: Promise) in
+            guard GIDSignIn.sharedInstance.configuration != nil else {
+                return promise.reject(Err.notConfigured, "configure() not called or iosClientId unresolved")
+            }
             GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
                 if let error = error as NSError? {
                     if error.code == GIDSignInError.hasNoAuthInKeychain.rawValue {
                         return promise.resolve(nil)
                     }
-                    return promise.reject("ERR_UNKNOWN", error.localizedDescription)
+                    return promise.reject(Err.unknown, error.localizedDescription)
                 }
                 guard let user,
                       let idToken = user.idToken?.tokenString,

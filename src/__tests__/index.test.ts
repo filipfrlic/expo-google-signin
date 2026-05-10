@@ -9,7 +9,7 @@ jest.mock('../ExpoGoogleSigninModule', () => ({
 }));
 
 import NativeModule from '../ExpoGoogleSigninModule';
-import { configure } from '../index';
+import { configure, signIn, signOut, getCurrentUser } from '../index';
 
 const native = NativeModule as unknown as {
   configure: jest.Mock;
@@ -39,13 +39,16 @@ describe('configure', () => {
     });
   });
 
-  it('throws if webClientId is missing', () => {
+  it('throws GoogleSigninError if webClientId is missing', () => {
     // @ts-expect-error testing runtime guard
-    expect(() => configure({})).toThrow(/webClientId/);
+    expect(() => configure({})).toThrow(
+      expect.objectContaining({
+        name: 'GoogleSigninError',
+        code: 'ERR_NOT_CONFIGURED',
+      })
+    );
   });
 });
-
-import { signOut } from '../index';
 
 describe('signOut', () => {
   it('calls the native module', async () => {
@@ -63,8 +66,6 @@ describe('signOut', () => {
     });
   });
 });
-
-import { signIn } from '../index';
 
 const fakeUser = {
   id: '1234567890',
@@ -101,8 +102,6 @@ describe('signIn', () => {
     });
   });
 });
-
-import { getCurrentUser } from '../index';
 
 describe('getCurrentUser', () => {
   it('returns null when no cached user exists', async () => {

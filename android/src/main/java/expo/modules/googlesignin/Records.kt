@@ -5,7 +5,6 @@ import expo.modules.kotlin.records.Record
 
 class ConfigureOptions : Record {
     @Field var webClientId: String = ""
-    @Field var iosClientId: String? = null
     @Field var hostedDomain: String? = null
 }
 

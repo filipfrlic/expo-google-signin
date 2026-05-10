@@ -1,5 +1,5 @@
 import NativeModule from './ExpoGoogleSigninModule';
-import { mapNativeError } from './errors';
+import { GoogleSigninError, mapNativeError } from './errors';
 import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
 
 export type {
@@ -14,7 +14,10 @@ export { GoogleSigninError } from './errors';
 
 export const configure = (options: ConfigureOptions): void => {
   if (!options || !options.webClientId) {
-    throw new Error('expo-google-signin: configure() requires a webClientId');
+    throw new GoogleSigninError(
+      'ERR_NOT_CONFIGURED',
+      'configure() requires a webClientId'
+    );
   }
   NativeModule.configure(options);
 };
