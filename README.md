@@ -88,6 +88,14 @@ await supabase.auth.signInWithIdToken({
 });
 ```
 
+### Platform behavior
+
+The same code path works on iOS, Android, and web. Differences worth knowing:
+
+- `signIn()` surfaces the platform's account chooser — Google's iOS sheet, Android's Credential Manager bottom sheet, or the web FedCM / One Tap prompt.
+- `getCurrentUser()` restores the cached session: native SDKs persist across app launches, web reads from `sessionStorage` (does not survive a tab close). On every platform the ID token's `exp` claim is checked; expired tokens resolve to `null`.
+- `signOut()` clears the SDK's cached account on native, and clears `sessionStorage` plus calls `disableAutoSelect()` on web.
+
 ## Errors
 
 Errors thrown by this package are `GoogleSigninError` with a typed `code`:
@@ -111,6 +119,29 @@ try {
   // ...
 }
 ```
+
+## Troubleshooting
+
+### Web: the prompt never shows up
+
+GIS silently suppresses One Tap when something is misconfigured. Common causes:
+
+- **Origin not registered.** Add every page origin you sign in from (e.g. `http://localhost:8081`, `https://your-app.com`) to *Authorized JavaScript origins* on your Web OAuth client. Symptom: `ERR_UNKNOWN` with `unregistered_origin` in the message.
+- **User isn't signed in to any Google account in the browser.** Surfaces as `ERR_NO_CREDENTIAL`. There's nothing the app can do — the user must sign in to Google first.
+- **Throttling.** GIS rate-limits repeat prompts after a user dismisses them. Reload the page or wait.
+- **CSP blocking the script.** If your `script-src` is locked down, add `https://accounts.google.com` to it. A blocked script surfaces as `ERR_NETWORK`.
+
+### Android: sign-in returns `ERR_NO_CREDENTIAL` on every attempt
+
+Credential Manager could not find a matching Google account for your app. Usually the signing key's SHA-1 isn't registered against your Android OAuth client. Re-check with `keytool` (see [Client IDs](#client-ids)) and add a fingerprint for every key that may sign builds — debug, EAS internal, EAS production. The Android API gives no error code for this; it just returns no credential.
+
+### iOS: the Google sheet opens then immediately closes
+
+`iosUrlScheme` is missing or wrong. Confirm the plugin block in `app.json` uses the *reversed* iOS client ID (`com.googleusercontent.apps.<NUMBER>-<HASH>`), then rebuild the dev client — config plugin changes only take effect after `expo prebuild` / a native rebuild.
+
+### `instanceof GoogleSigninError` is false even though the error came from this package
+
+Some bundlers create multiple module realms (Metro hot reload, certain test runners). Branch on `error.code` instead — see [Errors](#errors).
 
 ## Roadmap
 
