@@ -5,11 +5,7 @@ import { writeCached, clearCached, readCached } from './web/storage';
 import { GoogleSigninError } from './errors';
 
 type Moment = {
-  isNotDisplayed: () => boolean;
-  isSkippedMoment: () => boolean;
   isDismissedMoment: () => boolean;
-  getNotDisplayedReason?: () => string;
-  getSkippedReason?: () => string;
   getDismissedReason?: () => string;
 };
 
@@ -35,31 +31,19 @@ declare global {
   }
 }
 
+// Under FedCM (Chrome 128+), GIS only fires display and dismissed moments; the
+// legacy isNotDisplayed/isSkippedMoment predicates always return false and
+// reading them logs a deprecation warning. Stick to the dismissed channel.
 const CANCEL_REASONS = new Set(['user_cancel', 'tap_outside', 'cancel_called']);
-const NO_CRED_REASONS = new Set(['opt_out_or_no_session', 'suppressed_by_user']);
-
-const momentReason = (n: Moment): string | undefined => {
-  if (n.isNotDisplayed()) return n.getNotDisplayedReason?.();
-  if (n.isSkippedMoment()) return n.getSkippedReason?.();
-  if (n.isDismissedMoment()) return n.getDismissedReason?.();
-  return undefined;
-};
 
 const mapMomentToCode = (
   n: Moment
-): 'ERR_SIGN_IN_CANCELLED' | 'ERR_NO_CREDENTIAL' | 'ERR_UNKNOWN' | null => {
-  const reason = momentReason(n);
-  if (reason === 'credential_returned') return null;
-  if (n.isSkippedMoment() || n.isDismissedMoment()) {
-    if (reason && CANCEL_REASONS.has(reason)) return 'ERR_SIGN_IN_CANCELLED';
-    if (reason === 'flow_restarted') return null;
-    return 'ERR_UNKNOWN';
-  }
-  if (n.isNotDisplayed()) {
-    if (reason && NO_CRED_REASONS.has(reason)) return 'ERR_NO_CREDENTIAL';
-    return 'ERR_UNKNOWN';
-  }
-  return null;
+): 'ERR_SIGN_IN_CANCELLED' | 'ERR_UNKNOWN' | null => {
+  if (!n.isDismissedMoment()) return null;
+  const reason = n.getDismissedReason?.();
+  if (reason === 'credential_returned' || reason === 'flow_restarted') return null;
+  if (reason && CANCEL_REASONS.has(reason)) return 'ERR_SIGN_IN_CANCELLED';
+  return 'ERR_UNKNOWN';
 };
 
 let configured: ConfigureOptions | undefined;
@@ -126,7 +110,7 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
       const code = mapMomentToCode(notification);
       if (!code) return;
       settled = true;
-      reject(new GoogleSigninError(code, momentReason(notification) ?? 'sign-in not completed'));
+      reject(new GoogleSigninError(code, notification.getDismissedReason?.() ?? 'sign-in not completed'));
     });
   });
 };

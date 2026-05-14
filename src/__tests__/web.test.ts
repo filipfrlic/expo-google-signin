@@ -78,8 +78,6 @@ function fireMoment(builder: (n: Record<string, unknown>) => void) {
   const promptCall = calls[calls.length - 1];
   const listener = promptCall?.[0] as (n: Record<string, unknown>) => void;
   const notification: Record<string, unknown> = {
-    isNotDisplayed: () => false,
-    isSkippedMoment: () => false,
     isDismissedMoment: () => false,
   };
   builder(notification);
@@ -162,21 +160,6 @@ describe('signIn', () => {
     });
   });
 
-  it('rejects with ERR_SIGN_IN_CANCELLED when user dismisses One Tap', async () => {
-    const mod = loadModule();
-    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
-    const pending = mod.signIn({});
-    await new Promise<void>((r) => queueMicrotask(r));
-    fireMoment((n) => {
-      n.isSkippedMoment = () => true;
-      n.getSkippedReason = () => 'user_cancel';
-    });
-    await expect(pending).rejects.toMatchObject({
-      name: 'GoogleSigninError',
-      code: 'ERR_SIGN_IN_CANCELLED',
-    });
-  });
-
   it('rejects with ERR_SIGN_IN_CANCELLED when prompt is dismissed via cancel_called', async () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
@@ -189,28 +172,41 @@ describe('signIn', () => {
     await expect(pending).rejects.toMatchObject({ code: 'ERR_SIGN_IN_CANCELLED' });
   });
 
-  it('rejects with ERR_NO_CREDENTIAL when prompt is not displayed', async () => {
+  it('rejects with ERR_SIGN_IN_CANCELLED when prompt is dismissed via user_cancel', async () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
     await new Promise<void>((r) => queueMicrotask(r));
     fireMoment((n) => {
-      n.isNotDisplayed = () => true;
-      n.getNotDisplayedReason = () => 'opt_out_or_no_session';
+      n.isDismissedMoment = () => true;
+      n.getDismissedReason = () => 'user_cancel';
     });
-    await expect(pending).rejects.toMatchObject({ code: 'ERR_NO_CREDENTIAL' });
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_SIGN_IN_CANCELLED' });
   });
 
-  it('rejects with ERR_UNKNOWN for other not-displayed reasons', async () => {
+  it('rejects with ERR_UNKNOWN for unrecognized dismissal reasons', async () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
     await new Promise<void>((r) => queueMicrotask(r));
     fireMoment((n) => {
-      n.isNotDisplayed = () => true;
-      n.getNotDisplayedReason = () => 'unregistered_origin';
+      n.isDismissedMoment = () => true;
+      n.getDismissedReason = () => 'something_weird';
     });
     await expect(pending).rejects.toMatchObject({ code: 'ERR_UNKNOWN' });
+  });
+
+  it('ignores the flow_restarted dismissal moment', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    fireMoment((n) => {
+      n.isDismissedMoment = () => true;
+      n.getDismissedReason = () => 'flow_restarted';
+    });
+    fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
+    await expect(pending).resolves.toMatchObject({ idToken: expect.any(String) });
   });
 
   it('ignores the credential_returned dismissal moment after credential resolves', async () => {

@@ -124,10 +124,10 @@ try {
 
 ### Web: the prompt never shows up
 
-GIS silently suppresses One Tap when something is misconfigured. Common causes:
+Under FedCM (Chrome 128+), GIS handles most of this in browser-native UI rather than firing a specific error code. Common causes:
 
-- **Origin not registered.** Add every page origin you sign in from (e.g. `http://localhost:8081`, `https://your-app.com`) to *Authorized JavaScript origins* on your Web OAuth client. Symptom: `ERR_UNKNOWN` with `unregistered_origin` in the message.
-- **User isn't signed in to any Google account in the browser.** Surfaces as `ERR_NO_CREDENTIAL`. There's nothing the app can do — the user must sign in to Google first.
+- **Origin not registered.** Add every page origin you sign in from (e.g. `http://localhost:8081`, `https://your-app.com`) to *Authorized JavaScript origins* on your Web OAuth client. GIS will log an error in the console; the prompt won't appear.
+- **User isn't signed in to any Google account in the browser.** The browser shows its own "no account" UI; the user must sign in to Google first.
 - **Throttling.** GIS rate-limits repeat prompts after a user dismisses them. Reload the page or wait.
 - **CSP blocking the script.** If your `script-src` is locked down, add `https://accounts.google.com` to it. A blocked script surfaces as `ERR_NETWORK`.
 
