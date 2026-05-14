@@ -58,6 +58,32 @@ function loadModule() {
   };
 }
 
+const b64url = (s: string) =>
+  Buffer.from(s).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+const makeJwt = (payload: Record<string, unknown>) =>
+  `${b64url(JSON.stringify({ alg: 'RS256' }))}.${b64url(JSON.stringify(payload))}.signature`;
+
+const farFutureExp = Math.floor(Date.now() / 1000) + 3600;
+
+function fireCredential(jwt: string) {
+  const initCall = initializeFn.mock.calls.at(-1);
+  const config = initCall?.[0] as { callback: (r: { credential: string }) => void };
+  config.callback({ credential: jwt });
+}
+
+function fireMoment(builder: (n: Record<string, unknown>) => void) {
+  const promptCall = promptFn.mock.calls.at(-1);
+  const listener = promptCall?.[0] as (n: Record<string, unknown>) => void;
+  const notification: Record<string, unknown> = {
+    isNotDisplayed: () => false,
+    isSkippedMoment: () => false,
+    isDismissedMoment: () => false,
+  };
+  builder(notification);
+  listener(notification);
+}
+
 describe('configure', () => {
   it('injects the GIS script tag on first call', () => {
     const mod = loadModule();
@@ -73,5 +99,42 @@ describe('configure', () => {
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     expect(appendSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('signIn', () => {
+  it('resolves with idToken and decoded user on credential callback', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const jwt = makeJwt({
+      sub: 'user-123',
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      given_name: 'Jane',
+      family_name: 'Doe',
+      picture: 'https://lh3.googleusercontent.com/a/photo',
+      exp: farFutureExp,
+    });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    fireCredential(jwt);
+    const result = await pending;
+    expect(result.idToken).toBe(jwt);
+    expect(result.user).toEqual({
+      id: 'user-123',
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      givenName: 'Jane',
+      familyName: 'Doe',
+      photo: 'https://lh3.googleusercontent.com/a/photo',
+    });
+    expect(initializeFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client_id: 'web.apps.googleusercontent.com',
+        use_fedcm_for_prompt: true,
+        auto_select: false,
+      })
+    );
+    expect(promptFn).toHaveBeenCalled();
   });
 });
