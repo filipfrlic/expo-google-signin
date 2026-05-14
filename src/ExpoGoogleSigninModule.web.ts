@@ -4,6 +4,15 @@ import { decodeIdToken } from './web/decodeIdToken';
 import { writeCached } from './web/storage';
 import { GoogleSigninError } from './errors';
 
+type Moment = {
+  isNotDisplayed: () => boolean;
+  isSkippedMoment: () => boolean;
+  isDismissedMoment: () => boolean;
+  getNotDisplayedReason?: () => string;
+  getSkippedReason?: () => string;
+  getDismissedReason?: () => string;
+};
+
 type Google = {
   accounts: {
     id: {
@@ -14,16 +23,7 @@ type Google = {
         use_fedcm_for_prompt?: boolean;
         auto_select?: boolean;
       }) => void;
-      prompt: (
-        listener?: (notification: {
-          isNotDisplayed: () => boolean;
-          isSkippedMoment: () => boolean;
-          isDismissedMoment: () => boolean;
-          getNotDisplayedReason?: () => string;
-          getSkippedReason?: () => string;
-          getDismissedReason?: () => string;
-        }) => void
-      ) => void;
+      prompt: (listener?: (notification: Moment) => void) => void;
       disableAutoSelect: () => void;
     };
   };
@@ -34,6 +34,33 @@ declare global {
     google?: Google;
   }
 }
+
+const CANCEL_REASONS = new Set(['user_cancel', 'tap_outside', 'cancel_called']);
+const NO_CRED_REASONS = new Set(['opt_out_or_no_session', 'suppressed_by_user']);
+
+const momentReason = (n: Moment): string | undefined => {
+  if (n.isNotDisplayed()) return n.getNotDisplayedReason?.();
+  if (n.isSkippedMoment()) return n.getSkippedReason?.();
+  if (n.isDismissedMoment()) return n.getDismissedReason?.();
+  return undefined;
+};
+
+const mapMomentToCode = (
+  n: Moment
+): 'ERR_SIGN_IN_CANCELLED' | 'ERR_NO_CREDENTIAL' | 'ERR_UNKNOWN' | null => {
+  const reason = momentReason(n);
+  if (reason === 'credential_returned') return null;
+  if (n.isSkippedMoment() || n.isDismissedMoment()) {
+    if (reason && CANCEL_REASONS.has(reason)) return 'ERR_SIGN_IN_CANCELLED';
+    if (reason === 'flow_restarted') return null;
+    return 'ERR_UNKNOWN';
+  }
+  if (n.isNotDisplayed()) {
+    if (reason && NO_CRED_REASONS.has(reason)) return 'ERR_NO_CREDENTIAL';
+    return 'ERR_UNKNOWN';
+  }
+  return null;
+};
 
 let configured: ConfigureOptions | undefined;
 let scriptLoad: Promise<void> | undefined;
@@ -86,8 +113,12 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
       use_fedcm_for_prompt: true,
       auto_select: false,
     });
-    google.accounts.id.prompt((_notification) => {
-      // Moment handling added in later tasks.
+    google.accounts.id.prompt((notification) => {
+      if (settled) return;
+      const code = mapMomentToCode(notification);
+      if (!code) return;
+      settled = true;
+      reject(new GoogleSigninError(code, momentReason(notification) ?? 'sign-in not completed'));
     });
   });
 };
