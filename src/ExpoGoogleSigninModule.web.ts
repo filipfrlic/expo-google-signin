@@ -76,7 +76,11 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   if (!configured) {
     throw new GoogleSigninError('ERR_NOT_CONFIGURED', 'configure() was not called');
   }
-  await scriptLoad;
+  try {
+    await scriptLoad;
+  } catch {
+    throw new GoogleSigninError('ERR_NETWORK', 'Failed to load Google Identity Services');
+  }
   const google = window.google;
   if (!google) {
     throw new GoogleSigninError('ERR_UNKNOWN', 'Google Identity Services failed to load');

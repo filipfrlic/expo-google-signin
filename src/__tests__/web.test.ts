@@ -252,4 +252,21 @@ describe('signIn', () => {
     );
     await expect(pending).resolves.toMatchObject({ idToken: expect.any(String) });
   });
+
+  it('rejects with ERR_NETWORK when the GIS script fails to load', async () => {
+    appendSpy.mockReset();
+    appendSpy.mockImplementation((node) => {
+      if (node instanceof HTMLScriptElement && node.src.includes('gsi/client')) {
+        queueMicrotask(() => node.onerror?.(new Event('error')));
+      }
+      return node;
+    });
+
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    await expect(mod.signIn({})).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_NETWORK',
+    });
+  });
 });
