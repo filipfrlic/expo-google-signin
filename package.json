@@ -1,6 +1,6 @@
 {
   "name": "@filipfrlic/expo-google-signin",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Native Google Sign-In for Expo via Android Credential Manager and iOS GoogleSignIn SDK. Free, focused, new-architecture-ready.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
