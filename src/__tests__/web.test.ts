@@ -270,3 +270,25 @@ describe('signIn', () => {
     });
   });
 });
+
+describe('signOut', () => {
+  it('clears the cached session and calls disableAutoSelect', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
+    await pending;
+    expect(sessionStorage.getItem('expo-google-signin:session')).not.toBeNull();
+
+    await mod.signOut();
+    expect(sessionStorage.getItem('expo-google-signin:session')).toBeNull();
+    expect(disableAutoSelectFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw when GIS has not loaded yet', async () => {
+    const mod = loadModule();
+    await expect(mod.signOut()).resolves.toBeUndefined();
+    expect(disableAutoSelectFn).not.toHaveBeenCalled();
+  });
+});

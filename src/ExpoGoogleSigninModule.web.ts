@@ -1,7 +1,7 @@
 import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
 import { loadGis } from './web/loadGis';
 import { decodeIdToken } from './web/decodeIdToken';
-import { writeCached } from './web/storage';
+import { writeCached, clearCached, readCached } from './web/storage';
 import { GoogleSigninError } from './errors';
 
 type Moment = {
@@ -133,7 +133,10 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
 };
 
 const signOut = async (): Promise<void> => {
-  throw new Error('not implemented');
+  if (typeof window !== 'undefined' && window.google) {
+    window.google.accounts.id.disableAutoSelect();
+  }
+  clearCached();
 };
 
 const getCurrentUser = async (): Promise<SignInResult | null> => {
