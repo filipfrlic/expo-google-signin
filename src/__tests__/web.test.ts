@@ -137,4 +137,26 @@ describe('signIn', () => {
     );
     expect(promptFn).toHaveBeenCalled();
   });
+
+  it('forwards nonce to google.accounts.id.initialize', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const pending = mod.signIn({ nonce: 'hashed-nonce-abc' });
+    await new Promise<void>((r) => queueMicrotask(r));
+    expect(initializeFn).toHaveBeenCalledWith(
+      expect.objectContaining({ nonce: 'hashed-nonce-abc' })
+    );
+    fireCredential(
+      makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp })
+    );
+    await pending;
+  });
+
+  it('rejects with ERR_NOT_CONFIGURED when configure() was not called', async () => {
+    const mod = loadModule();
+    await expect(mod.signIn({})).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_NOT_CONFIGURED',
+    });
+  });
 });
