@@ -72,18 +72,6 @@ const configure = (options: ConfigureOptions): void => {
   }
 };
 
-const toUser = (jwt: string) => {
-  const decoded = decodeIdToken(jwt);
-  return {
-    id: decoded.sub,
-    email: decoded.email,
-    name: decoded.name ?? null,
-    givenName: decoded.given_name ?? null,
-    familyName: decoded.family_name ?? null,
-    photo: decoded.picture ?? null,
-  };
-};
-
 const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   if (!configured) {
     throw new GoogleSigninError('ERR_NOT_CONFIGURED', 'configure() was not called');
@@ -101,7 +89,24 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
         if (settled) return;
         settled = true;
         try {
-          const user = toUser(response.credential);
+          const decoded = decodeIdToken(response.credential);
+          if (configured!.hostedDomain && decoded.hd !== configured!.hostedDomain) {
+            reject(
+              new GoogleSigninError(
+                'ERR_NO_CREDENTIAL',
+                `hostedDomain mismatch: expected ${configured!.hostedDomain}, got ${decoded.hd ?? 'none'}`
+              )
+            );
+            return;
+          }
+          const user = {
+            id: decoded.sub,
+            email: decoded.email,
+            name: decoded.name ?? null,
+            givenName: decoded.given_name ?? null,
+            familyName: decoded.family_name ?? null,
+            photo: decoded.picture ?? null,
+          };
           const result: SignInResult = { idToken: response.credential, user };
           writeCached(result);
           resolve(result);

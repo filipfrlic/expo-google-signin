@@ -223,4 +223,33 @@ describe('signIn', () => {
     });
     await expect(pending).resolves.toMatchObject({ idToken: expect.any(String) });
   });
+
+  it('rejects with ERR_NO_CREDENTIAL when hostedDomain does not match the hd claim', async () => {
+    const mod = loadModule();
+    mod.configure({
+      webClientId: 'web.apps.googleusercontent.com',
+      hostedDomain: 'example.com',
+    });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    fireCredential(
+      makeJwt({ sub: 'x', email: 'y@other.com', hd: 'other.com', exp: farFutureExp })
+    );
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_NO_CREDENTIAL' });
+    expect(sessionStorage.getItem('expo-google-signin:session')).toBeNull();
+  });
+
+  it('resolves when hostedDomain matches', async () => {
+    const mod = loadModule();
+    mod.configure({
+      webClientId: 'web.apps.googleusercontent.com',
+      hostedDomain: 'example.com',
+    });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    fireCredential(
+      makeJwt({ sub: 'x', email: 'y@example.com', hd: 'example.com', exp: farFutureExp })
+    );
+    await expect(pending).resolves.toMatchObject({ idToken: expect.any(String) });
+  });
 });
