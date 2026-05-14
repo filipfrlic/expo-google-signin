@@ -63,21 +63,20 @@ const mapMomentToCode = (
 };
 
 let configured: ConfigureOptions | undefined;
-let scriptLoad: Promise<void> | undefined;
 
 const configure = (options: ConfigureOptions): void => {
   configured = options;
-  if (!scriptLoad) {
-    scriptLoad = loadGis();
-  }
+  // Fire-and-forget — loadGis is idempotent; signIn awaits it.
+  void loadGis();
 };
 
 const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   if (!configured) {
     throw new GoogleSigninError('ERR_NOT_CONFIGURED', 'configure() was not called');
   }
+  const config = configured;
   try {
-    await scriptLoad;
+    await loadGis();
   } catch {
     throw new GoogleSigninError('ERR_NETWORK', 'Failed to load Google Identity Services');
   }
@@ -88,17 +87,17 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   return new Promise<SignInResult>((resolve, reject) => {
     let settled = false;
     google.accounts.id.initialize({
-      client_id: configured!.webClientId,
+      client_id: config.webClientId,
       callback: (response) => {
         if (settled) return;
         settled = true;
         try {
           const decoded = decodeIdToken(response.credential);
-          if (configured!.hostedDomain && decoded.hd !== configured!.hostedDomain) {
+          if (config.hostedDomain && decoded.hd !== config.hostedDomain) {
             reject(
               new GoogleSigninError(
                 'ERR_NO_CREDENTIAL',
-                `hostedDomain mismatch: expected ${configured!.hostedDomain}, got ${decoded.hd ?? 'none'}`
+                `hostedDomain mismatch: expected ${config.hostedDomain}, got ${decoded.hd ?? 'none'}`
               )
             );
             return;
