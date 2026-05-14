@@ -1,6 +1,6 @@
 # @filipfrlic/expo-google-signin
 
-A Google Sign-In package for Expo. Uses Credential Manager on Android and Google's iOS SDK (9.x) on iOS. Works with the new architecture. No web support yet.
+A Google Sign-In package for Expo. Uses Credential Manager on Android, Google's iOS SDK (9.x) on iOS, and Google Identity Services (One Tap / FedCM) on web. Works with the new architecture.
 
 ## Install
 
@@ -51,6 +51,14 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 ```
 
 Register every fingerprint that might sign your app: debug, EAS internal, EAS production.
+
+### Web
+
+No plugin step or `iosUrlScheme` is needed. Just call `configure({ webClientId })`. The package auto-injects the Google Identity Services script (`https://accounts.google.com/gsi/client`) on `configure()`, and `signIn()` triggers the One Tap / FedCM prompt.
+
+Make sure your **Web OAuth client** in the Google Cloud Console has the page origin (e.g. `http://localhost:8081`, `https://your-app.com`) registered under *Authorized JavaScript origins*. Without it, the prompt is suppressed and you'll see `ERR_UNKNOWN` with `unregistered_origin` in the message.
+
+`ERR_PLAY_SERVICES_UNAVAILABLE` is never emitted on web. All other error codes apply the same way they do on native.
 
 ## Usage
 
@@ -108,7 +116,6 @@ try {
 
 - Additional OAuth scopes + `accessToken` for Drive/Calendar/etc.
 - Server auth code for offline access
-- Web via Google Identity Services
 
 ## License
 
