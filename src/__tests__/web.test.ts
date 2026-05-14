@@ -292,3 +292,48 @@ describe('signOut', () => {
     expect(disableAutoSelectFn).not.toHaveBeenCalled();
   });
 });
+
+describe('getCurrentUser', () => {
+  it('returns the cached session after a successful signIn', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const pending = mod.signIn({});
+    await new Promise<void>((r) => queueMicrotask(r));
+    const jwt = makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp });
+    fireCredential(jwt);
+    const signed = await pending;
+
+    const current = await mod.getCurrentUser();
+    expect(current).toEqual(signed);
+  });
+
+  it('returns null when no session is cached', async () => {
+    const mod = loadModule();
+    await expect(mod.getCurrentUser()).resolves.toBeNull();
+  });
+
+  it('returns null and clears storage when the cached token has expired', async () => {
+    const expiredJwt = makeJwt({
+      sub: 'x',
+      email: 'y@z.com',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    sessionStorage.setItem(
+      'expo-google-signin:session',
+      JSON.stringify({
+        idToken: expiredJwt,
+        user: {
+          id: 'x',
+          email: 'y@z.com',
+          name: null,
+          givenName: null,
+          familyName: null,
+          photo: null,
+        },
+      })
+    );
+    const mod = loadModule();
+    await expect(mod.getCurrentUser()).resolves.toBeNull();
+    expect(sessionStorage.getItem('expo-google-signin:session')).toBeNull();
+  });
+});

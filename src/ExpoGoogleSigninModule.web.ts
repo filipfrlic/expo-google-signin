@@ -140,7 +140,7 @@ const signOut = async (): Promise<void> => {
 };
 
 const getCurrentUser = async (): Promise<SignInResult | null> => {
-  throw new Error('not implemented');
+  return readCached();
 };
 
 export default { configure, signIn, signOut, getCurrentUser };
