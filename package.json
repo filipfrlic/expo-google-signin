@@ -32,6 +32,7 @@
   "homepage": "https://github.com/filipfrlic/expo-google-signin#readme",
   "files": [
     "src/*.ts",
+    "src/web/*.ts",
     "android/src",
     "android/build.gradle",
     "ios",
