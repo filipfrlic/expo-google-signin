@@ -67,13 +67,15 @@ const makeJwt = (payload: Record<string, unknown>) =>
 const farFutureExp = Math.floor(Date.now() / 1000) + 3600;
 
 function fireCredential(jwt: string) {
-  const initCall = initializeFn.mock.calls.at(-1);
+  const calls = initializeFn.mock.calls;
+  const initCall = calls[calls.length - 1];
   const config = initCall?.[0] as { callback: (r: { credential: string }) => void };
   config.callback({ credential: jwt });
 }
 
 function fireMoment(builder: (n: Record<string, unknown>) => void) {
-  const promptCall = promptFn.mock.calls.at(-1);
+  const calls = promptFn.mock.calls;
+  const promptCall = calls[calls.length - 1];
   const listener = promptCall?.[0] as (n: Record<string, unknown>) => void;
   const notification: Record<string, unknown> = {
     isNotDisplayed: () => false,
