@@ -46,6 +46,40 @@ const mapMomentToCode = (
   return 'ERR_UNKNOWN';
 };
 
+export const resolveCredential = (
+  credential: string,
+  config: ConfigureOptions
+): { ok: true; result: SignInResult } | { ok: false; error: GoogleSigninError } => {
+  try {
+    const decoded = decodeIdToken(credential);
+    if (config.hostedDomain && decoded.hd !== config.hostedDomain) {
+      return {
+        ok: false,
+        error: new GoogleSigninError(
+          'ERR_NO_CREDENTIAL',
+          `hostedDomain mismatch: expected ${config.hostedDomain}, got ${decoded.hd ?? 'none'}`
+        ),
+      };
+    }
+    const user = {
+      id: decoded.sub,
+      email: decoded.email,
+      name: decoded.name ?? null,
+      givenName: decoded.given_name ?? null,
+      familyName: decoded.family_name ?? null,
+      photo: decoded.picture ?? null,
+    };
+    const result: SignInResult = { idToken: credential, user };
+    writeCached(result);
+    return { ok: true, result };
+  } catch (err) {
+    return {
+      ok: false,
+      error: new GoogleSigninError('ERR_UNKNOWN', (err as Error).message),
+    };
+  }
+};
+
 let configured: ConfigureOptions | undefined;
 
 const configure = (options: ConfigureOptions): void => {
@@ -75,30 +109,11 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
       callback: (response) => {
         if (settled) return;
         settled = true;
-        try {
-          const decoded = decodeIdToken(response.credential);
-          if (config.hostedDomain && decoded.hd !== config.hostedDomain) {
-            reject(
-              new GoogleSigninError(
-                'ERR_NO_CREDENTIAL',
-                `hostedDomain mismatch: expected ${config.hostedDomain}, got ${decoded.hd ?? 'none'}`
-              )
-            );
-            return;
-          }
-          const user = {
-            id: decoded.sub,
-            email: decoded.email,
-            name: decoded.name ?? null,
-            givenName: decoded.given_name ?? null,
-            familyName: decoded.family_name ?? null,
-            photo: decoded.picture ?? null,
-          };
-          const result: SignInResult = { idToken: response.credential, user };
-          writeCached(result);
-          resolve(result);
-        } catch (err) {
-          reject(new GoogleSigninError('ERR_UNKNOWN', (err as Error).message));
+        const outcome = resolveCredential(response.credential, config);
+        if (outcome.ok) {
+          resolve(outcome.result);
+        } else {
+          reject(outcome.error);
         }
       },
       nonce: options.nonce,
