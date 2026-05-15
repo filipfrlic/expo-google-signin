@@ -96,6 +96,30 @@ The same code path works on iOS, Android, and web. Differences worth knowing:
 - `getCurrentUser()` restores the cached session: native SDKs persist across app launches, web reads from `sessionStorage` (does not survive a tab close). On every platform the ID token's `exp` claim is checked; expired tokens resolve to `null`.
 - `signOut()` clears the SDK's cached account on native, and clears `sessionStorage` plus calls `disableAutoSelect()` on web.
 
+### Web: rendered Sign-In button
+
+`signIn()` on web uses FedCM / One Tap, which is Chrome-only and silently no-ops when the user isn't already signed into Google. For Firefox, Safari, or a fresh-browser fallback, render the Google-styled button — clicking it opens Google's popup (with login if needed) and produces the same `SignInResult`.
+
+```ts
+import { renderGoogleSignInButton } from '@filipfrlic/expo-google-signin';
+
+useEffect(() => {
+  if (!ref.current) return;
+  return renderGoogleSignInButton(ref.current, {
+    onSuccess: ({ idToken, user }) => { /* hand idToken to your backend */ },
+    onError: (e) => console.warn(e.code, e.message),
+    theme: 'outline',
+    size: 'large',
+  });
+}, []);
+```
+
+The return value is an `unmount` function that clears the element — drops straight into `useEffect`'s cleanup slot.
+
+Calling this on iOS or Android throws `GoogleSigninError('ERR_UNKNOWN', ...)`; it's web-only. Use `signIn()` on native.
+
+Most production web apps render this button as the primary sign-in UI and treat One Tap as a silent fast-path optimization.
+
 ## Errors
 
 Errors thrown by this package are `GoogleSigninError` with a typed `code`:
@@ -127,7 +151,8 @@ try {
 Under FedCM (Chrome 128+), GIS handles most of this in browser-native UI rather than firing a specific error code. Common causes:
 
 - **Origin not registered.** Add every page origin you sign in from (e.g. `http://localhost:8081`, `https://your-app.com`) to *Authorized JavaScript origins* on your Web OAuth client. GIS will log an error in the console; the prompt won't appear.
-- **User isn't signed in to any Google account in the browser.** The browser shows its own "no account" UI; the user must sign in to Google first.
+- **User isn't signed in to any Google account in the browser.** FedCM does not show a Google login UI from third-party sites; if no session exists, the prompt silently fails. Use [`renderGoogleSignInButton`](#web-rendered-sign-in-button) — clicking the rendered button opens Google's popup with login.
+- **Browser doesn't support FedCM.** Firefox and Safari don't ship FedCM, and the pre-FedCM One Tap fallback needs third-party cookies they block by default. Use `renderGoogleSignInButton` instead.
 - **Throttling.** GIS rate-limits repeat prompts after a user dismisses them. Reload the page or wait.
 - **CSP blocking the script.** If your `script-src` is locked down, add `https://accounts.google.com` to it. A blocked script surfaces as `ERR_NETWORK`.
 
