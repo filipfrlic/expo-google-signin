@@ -53,6 +53,31 @@ export type SignInOptions = {
 };
 
 /**
+ * Options for {@link renderGoogleSignInButton}. Web-only — calling the function
+ * on iOS or Android throws synchronously.
+ */
+export type SignInButtonOptions = {
+  /** Required. Fires with `{ idToken, user }` when the user signs in successfully. */
+  onSuccess: (result: SignInResult) => void;
+  /** Optional. Fires on decode failure, hostedDomain mismatch, or script load failure. */
+  onError?: (error: import('./errors').GoogleSigninError) => void;
+  /** Hashed nonce; same semantics as {@link SignInOptions.nonce}. */
+  nonce?: string;
+  /** GIS button theme. Default `outline`. */
+  theme?: 'outline' | 'filled_blue' | 'filled_black';
+  /** GIS button size. Default `large`. */
+  size?: 'large' | 'medium' | 'small';
+  /** GIS button text. Default `signin_with`. */
+  text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+  /** GIS button shape. Default `rectangular`. */
+  shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+  /** Logo alignment. Default `left`. */
+  logo_alignment?: 'left' | 'center';
+  /** Button width in pixels (max 400). */
+  width?: number;
+};
+
+/**
  * Stable error codes set on {@link GoogleSigninError.code}. Branch on `code`
  * rather than `instanceof` — module realms can break the prototype chain.
  *

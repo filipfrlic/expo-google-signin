@@ -1,11 +1,27 @@
 import { requireNativeModule } from 'expo-modules-core';
-import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
+import { GoogleSigninError } from './errors';
+import type {
+  ConfigureOptions,
+  SignInButtonOptions,
+  SignInOptions,
+  SignInResult,
+} from './types';
 
 type NativeModule = {
   configure(options: ConfigureOptions): void;
   signIn(options: SignInOptions): Promise<SignInResult>;
   signOut(): Promise<void>;
   getCurrentUser(): Promise<SignInResult | null>;
+};
+
+export const renderGoogleSignInButton = (
+  _element: HTMLElement,
+  _options: SignInButtonOptions
+): (() => void) => {
+  throw new GoogleSigninError(
+    'ERR_UNKNOWN',
+    'renderGoogleSignInButton is web-only — use signIn() on native'
+  );
 };
 
 export default requireNativeModule<NativeModule>('ExpoGoogleSignin');

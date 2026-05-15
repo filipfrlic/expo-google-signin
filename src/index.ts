@@ -7,10 +7,12 @@ export type {
   SignInResult,
   ConfigureOptions,
   SignInOptions,
+  SignInButtonOptions,
   ErrorCode,
 } from './types';
 
 export { GoogleSigninError } from './errors';
+export { renderGoogleSignInButton } from './ExpoGoogleSigninModule';
 
 export const configure = (options: ConfigureOptions): void => {
   if (!options || !options.webClientId) {

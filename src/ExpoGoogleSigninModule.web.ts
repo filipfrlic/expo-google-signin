@@ -1,4 +1,9 @@
-import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
+import type {
+  ConfigureOptions,
+  SignInButtonOptions,
+  SignInOptions,
+  SignInResult,
+} from './types';
 import { loadGis } from './web/loadGis';
 import { decodeIdToken } from './web/decodeIdToken';
 import { writeCached, clearCached, readCached } from './web/storage';
@@ -20,6 +25,17 @@ type Google = {
         auto_select?: boolean;
       }) => void;
       prompt: (listener?: (notification: Moment) => void) => void;
+      renderButton: (
+        parent: HTMLElement,
+        options: {
+          theme?: SignInButtonOptions['theme'];
+          size?: SignInButtonOptions['size'];
+          text?: SignInButtonOptions['text'];
+          shape?: SignInButtonOptions['shape'];
+          logo_alignment?: SignInButtonOptions['logo_alignment'];
+          width?: number;
+        }
+      ) => void;
       disableAutoSelect: () => void;
     };
   };
@@ -139,6 +155,65 @@ const signOut = async (): Promise<void> => {
 
 const getCurrentUser = async (): Promise<SignInResult | null> => {
   return readCached();
+};
+
+export const renderGoogleSignInButton = (
+  element: HTMLElement,
+  options: SignInButtonOptions
+): (() => void) => {
+  if (!configured) {
+    throw new GoogleSigninError('ERR_NOT_CONFIGURED', 'configure() was not called');
+  }
+  const config = configured;
+  let unmounted = false;
+  const unmount = () => {
+    unmounted = true;
+    element.replaceChildren();
+  };
+
+  loadGis().then(
+    () => {
+      if (unmounted) return;
+      const google = window.google;
+      if (!google) {
+        options.onError?.(
+          new GoogleSigninError('ERR_UNKNOWN', 'Google Identity Services failed to load')
+        );
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: config.webClientId,
+        callback: (response) => {
+          if (unmounted) return;
+          const outcome = resolveCredential(response.credential, config);
+          if (outcome.ok) {
+            options.onSuccess(outcome.result);
+          } else {
+            options.onError?.(outcome.error);
+          }
+        },
+        nonce: options.nonce,
+        use_fedcm_for_prompt: true,
+        auto_select: false,
+      });
+      google.accounts.id.renderButton(element, {
+        theme: options.theme,
+        size: options.size,
+        text: options.text,
+        shape: options.shape,
+        logo_alignment: options.logo_alignment,
+        width: options.width,
+      });
+    },
+    () => {
+      if (unmounted) return;
+      options.onError?.(
+        new GoogleSigninError('ERR_NETWORK', 'Failed to load Google Identity Services')
+      );
+    }
+  );
+
+  return unmount;
 };
 
 export default { configure, signIn, signOut, getCurrentUser };
