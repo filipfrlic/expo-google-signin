@@ -10,9 +10,13 @@ const KNOWN_CODES = [
 ] as const satisfies ReadonlyArray<ErrorCode>;
 
 // Compile-time exhaustiveness pin: errors if a future ErrorCode union
-// member is added without a matching entry in KNOWN_CODES.
+// member is added without a matching entry in KNOWN_CODES. The assignment
+// below is what makes this fire — an unused type alias that resolves to
+// `never` raises no diagnostic on its own.
 type _ExhaustiveErrorCodes =
   Exclude<ErrorCode, (typeof KNOWN_CODES)[number]> extends never ? true : never;
+const _exhaustiveErrorCodes: _ExhaustiveErrorCodes = true;
+void _exhaustiveErrorCodes;
 
 export class GoogleSigninError extends Error {
   code: ErrorCode;
