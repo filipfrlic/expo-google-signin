@@ -96,6 +96,27 @@ export const resolveCredential = (
   }
 };
 
+/**
+ * Initialize GIS with the options this package always sends, forwarding the
+ * raw credential to the caller. Shared by `signIn` and
+ * `renderGoogleSignInButton` — they differ only in what they do afterwards
+ * (prompt vs. render) and in how they guard against late callbacks.
+ */
+const initializeGis = (
+  google: Google,
+  config: ConfigureOptions,
+  nonce: string | undefined,
+  onCredential: (credential: string) => void
+): void => {
+  google.accounts.id.initialize({
+    client_id: config.webClientId,
+    callback: (response) => onCredential(response.credential),
+    nonce,
+    use_fedcm_for_prompt: true,
+    auto_select: false,
+  });
+};
+
 let configured: ConfigureOptions | undefined;
 
 const configure = (options: ConfigureOptions): void => {
@@ -120,21 +141,15 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   }
   return new Promise<SignInResult>((resolve, reject) => {
     let settled = false;
-    google.accounts.id.initialize({
-      client_id: config.webClientId,
-      callback: (response) => {
-        if (settled) return;
-        settled = true;
-        const outcome = resolveCredential(response.credential, config);
-        if (outcome.ok) {
-          resolve(outcome.result);
-        } else {
-          reject(outcome.error);
-        }
-      },
-      nonce: options.nonce,
-      use_fedcm_for_prompt: true,
-      auto_select: false,
+    initializeGis(google, config, options.nonce, (credential) => {
+      if (settled) return;
+      settled = true;
+      const outcome = resolveCredential(credential, config);
+      if (outcome.ok) {
+        resolve(outcome.result);
+      } else {
+        reject(outcome.error);
+      }
     });
     google.accounts.id.prompt((notification) => {
       if (settled) return;
@@ -181,20 +196,14 @@ export const renderGoogleSignInButton = (
         );
         return;
       }
-      google.accounts.id.initialize({
-        client_id: config.webClientId,
-        callback: (response) => {
-          if (unmounted) return;
-          const outcome = resolveCredential(response.credential, config);
-          if (outcome.ok) {
-            options.onSuccess(outcome.result);
-          } else {
-            options.onError?.(outcome.error);
-          }
-        },
-        nonce: options.nonce,
-        use_fedcm_for_prompt: true,
-        auto_select: false,
+      initializeGis(google, config, options.nonce, (credential) => {
+        if (unmounted) return;
+        const outcome = resolveCredential(credential, config);
+        if (outcome.ok) {
+          options.onSuccess(outcome.result);
+        } else {
+          options.onError?.(outcome.error);
+        }
       });
       google.accounts.id.renderButton(element, {
         theme: options.theme,
