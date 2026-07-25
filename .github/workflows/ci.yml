@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Also builds the config plugin via the `prepare` lifecycle script,
+      # so a plugin that fails to compile fails CI here.
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
