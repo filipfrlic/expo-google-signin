@@ -1,7 +1,7 @@
 # Render Sign-In button for @filipfrlic/expo-google-signin
 
 Date: 2026-05-15
-Status: Approved
+Status: Implemented — shipped in 0.3.0
 
 ## Goal
 

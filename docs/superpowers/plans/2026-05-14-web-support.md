@@ -1,5 +1,9 @@
 # Web Support Implementation Plan
 
+**Status: Completed** — shipped in 0.2.0 (2026-05-14), with follow-up fixes in 0.2.1
+and 0.2.2. Kept as a historical record of how web support was built; it is not a
+description of current behavior. For that, see the README and `src/`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add web platform support to `@filipfrlic/expo-google-signin` by wiring up Google Identity Services (GIS) behind the existing TypeScript API so Expo Web apps can call `configure / signIn / signOut / getCurrentUser` with no platform branching.
@@ -20,7 +24,7 @@ Build the pure-JS `decodeIdToken` helper. No DOM, no GIS — easy to TDD in isol
 - Create: `src/web/decodeIdToken.ts`
 - Test: `src/__tests__/decodeIdToken.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/__tests__/decodeIdToken.test.ts`:
 
@@ -85,12 +89,12 @@ describe('decodeIdToken', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- --testPathPattern=decodeIdToken`
 Expected: FAIL with "Cannot find module '../web/decodeIdToken'"
 
-- [ ] **Step 3: Implement decodeIdToken**
+- [x] **Step 3: Implement decodeIdToken**
 
 Create `src/web/decodeIdToken.ts`:
 
@@ -132,12 +136,12 @@ export const decodeIdToken = (jwt: string): DecodedIdToken => {
 };
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=decodeIdToken`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/web/decodeIdToken.ts src/__tests__/decodeIdToken.test.ts
@@ -153,7 +157,7 @@ Tell `expo-module.config.json` that web is a supported platform. Tiny config cha
 **Files:**
 - Modify: `expo-module.config.json`
 
-- [ ] **Step 1: Update the platforms array**
+- [x] **Step 1: Update the platforms array**
 
 Edit `expo-module.config.json` — change the `platforms` array from `["ios", "android"]` to `["ios", "android", "web"]`. Result:
 
@@ -173,7 +177,7 @@ Edit `expo-module.config.json` — change the `platforms` array from `["ios", "a
 
 No `web` sub-object is needed — there is no native web module to register. The `.web.ts` file is the wiring.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add expo-module.config.json
@@ -192,7 +196,7 @@ Stand up `ExpoGoogleSigninModule.web.ts` with `configure` working end-to-end, in
 - Create: `src/ExpoGoogleSigninModule.web.ts`
 - Test: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/__tests__/web.test.ts`:
 
@@ -276,12 +280,12 @@ describe('configure', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL with "Cannot find module '../ExpoGoogleSigninModule.web'"
 
-- [ ] **Step 3: Implement the script loader**
+- [x] **Step 3: Implement the script loader**
 
 Create `src/web/loadGis.ts`:
 
@@ -310,7 +314,7 @@ export const loadGis = (): Promise<void> => {
 
 Tests don't need a manual reset — `jest.resetModules()` in `beforeEach` already drops this module from the cache, so the next `require` gets a fresh `loadPromise`.
 
-- [ ] **Step 4: Implement the storage layer**
+- [x] **Step 4: Implement the storage layer**
 
 Create `src/web/storage.ts`:
 
@@ -358,7 +362,7 @@ export const clearCached = (): void => {
 };
 ```
 
-- [ ] **Step 5: Implement the orchestrator skeleton**
+- [x] **Step 5: Implement the orchestrator skeleton**
 
 Create `src/ExpoGoogleSigninModule.web.ts`:
 
@@ -422,12 +426,12 @@ const getCurrentUser = async (): Promise<SignInResult | null> => {
 export default { configure, signIn, signOut, getCurrentUser };
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (2 tests in `configure` describe block)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/web/loadGis.ts src/web/storage.ts src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -444,7 +448,7 @@ Drive the credential callback through to a resolved `SignInResult`.
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add a JWT factory and a test for the happy path**
+- [x] **Step 1: Add a JWT factory and a test for the happy path**
 
 Add at the top of `src/__tests__/web.test.ts` after the imports/setup, before the existing `describe('configure', ...)`:
 
@@ -517,12 +521,12 @@ describe('signIn', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL with "not implemented"
 
-- [ ] **Step 3: Implement signIn**
+- [x] **Step 3: Implement signIn**
 
 Replace the `signIn` stub in `src/ExpoGoogleSigninModule.web.ts` with the real implementation. Also import the additional helpers at the top:
 
@@ -585,12 +589,12 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
 };
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (3 tests total — 2 for configure, 1 for signIn happy path)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -606,7 +610,7 @@ Two small additions: verify `nonce` reaches `initialize`, and that calling `sign
 **Files:**
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the tests**
+- [x] **Step 1: Add the tests**
 
 Inside the existing `describe('signIn', ...)` block, append:
 
@@ -634,12 +638,12 @@ it('rejects with ERR_NOT_CONFIGURED when configure() was not called', async () =
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they pass**
+- [x] **Step 2: Run the tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (5 tests total). No code change needed — Task 4's implementation already handles both cases.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/__tests__/web.test.ts
@@ -656,7 +660,7 @@ Wire the moment-notification listener to reject with the right error codes.
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the tests**
+- [x] **Step 1: Add the tests**
 
 Append to `describe('signIn', ...)`:
 
@@ -726,12 +730,12 @@ it('ignores the credential_returned dismissal moment after credential resolves',
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL on the four rejection cases (the credential_returned ignore case may pass since the resolver's `settled` flag already short-circuits — that's fine).
 
-- [ ] **Step 3: Implement the moment listener**
+- [x] **Step 3: Implement the moment listener**
 
 Replace the placeholder moment listener in `signIn` (the `_notification` arrow) with:
 
@@ -787,12 +791,12 @@ const mapMomentToCode = (
 
 Also import the matching error code type if helpful (not required — the helper returns a literal union).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (10 tests total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -809,7 +813,7 @@ Reject with `ERR_NO_CREDENTIAL` when the returned token's `hd` claim does not ma
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the tests**
+- [x] **Step 1: Add the tests**
 
 Append to `describe('signIn', ...)`:
 
@@ -844,12 +848,12 @@ it('resolves when hostedDomain matches', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL on the mismatch case — currently the credential is accepted and cached regardless of `hd`.
 
-- [ ] **Step 3: Implement hostedDomain enforcement**
+- [x] **Step 3: Implement hostedDomain enforcement**
 
 In `src/ExpoGoogleSigninModule.web.ts`, replace the credential `callback` body inside `signIn` so the `hd` check happens before `writeCached`:
 
@@ -887,12 +891,12 @@ In `src/ExpoGoogleSigninModule.web.ts`, replace the credential `callback` body i
 
 You can now remove the standalone `toUser` helper, since the callback inlines the mapping.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (12 tests total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -909,7 +913,7 @@ The promise from `loadGis()` rejects on `script.onerror`; `signIn` must surface 
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the test**
+- [x] **Step 1: Add the test**
 
 Append to `describe('signIn', ...)`:
 
@@ -932,12 +936,12 @@ it('rejects with ERR_NETWORK when the GIS script fails to load', async () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL — current implementation throws an unwrapped `Error` when the script load rejects.
 
-- [ ] **Step 3: Wrap the script-load error**
+- [x] **Step 3: Wrap the script-load error**
 
 In `signIn` in `src/ExpoGoogleSigninModule.web.ts`, replace the bare `await scriptLoad;` with:
 
@@ -949,12 +953,12 @@ In `signIn` in `src/ExpoGoogleSigninModule.web.ts`, replace the bare `await scri
   }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (13 tests total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -969,7 +973,7 @@ git commit -m "feat(expo-google-signin): surface GIS script load failure as ERR_
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the tests**
+- [x] **Step 1: Add the tests**
 
 Append to `src/__tests__/web.test.ts`:
 
@@ -997,12 +1001,12 @@ describe('signOut', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL with "not implemented".
 
-- [ ] **Step 3: Implement signOut**
+- [x] **Step 3: Implement signOut**
 
 Add the import at the top of `src/ExpoGoogleSigninModule.web.ts`:
 
@@ -1023,12 +1027,12 @@ const signOut = async (): Promise<void> => {
 };
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (15 tests total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -1043,7 +1047,7 @@ git commit -m "feat(expo-google-signin): implement web signOut"
 - Modify: `src/ExpoGoogleSigninModule.web.ts`
 - Modify: `src/__tests__/web.test.ts`
 
-- [ ] **Step 1: Add the tests**
+- [x] **Step 1: Add the tests**
 
 Append to `src/__tests__/web.test.ts`:
 
@@ -1094,12 +1098,12 @@ describe('getCurrentUser', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: FAIL with "not implemented".
 
-- [ ] **Step 3: Implement getCurrentUser**
+- [x] **Step 3: Implement getCurrentUser**
 
 Replace the `getCurrentUser` stub in `src/ExpoGoogleSigninModule.web.ts`:
 
@@ -1109,12 +1113,12 @@ const getCurrentUser = async (): Promise<SignInResult | null> => {
 };
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `npm test -- --testPathPattern=web.test`
 Expected: PASS (18 tests total).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ExpoGoogleSigninModule.web.ts src/__tests__/web.test.ts
@@ -1128,7 +1132,7 @@ git commit -m "feat(expo-google-signin): implement web getCurrentUser with exp c
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Drop "No web support yet." from the lead**
+- [x] **Step 1: Drop "No web support yet." from the lead**
 
 Replace this line in `README.md`:
 
@@ -1142,7 +1146,7 @@ With:
 A Google Sign-In package for Expo. Uses Credential Manager on Android, Google's iOS SDK (9.x) on iOS, and Google Identity Services (One Tap / FedCM) on web. Works with the new architecture.
 ```
 
-- [ ] **Step 2: Add a Web subsection under Configure**
+- [x] **Step 2: Add a Web subsection under Configure**
 
 After the existing `### Client IDs` section (and before `## Usage`), append:
 
@@ -1156,7 +1160,7 @@ Make sure your **Web OAuth client** in the Google Cloud Console has the page ori
 `ERR_PLAY_SERVICES_UNAVAILABLE` is never emitted on web. All other error codes apply the same way they do on native.
 ```
 
-- [ ] **Step 3: Remove the web line from the roadmap**
+- [x] **Step 3: Remove the web line from the roadmap**
 
 In the `## Roadmap` section, delete this bullet:
 
@@ -1166,7 +1170,7 @@ In the `## Roadmap` section, delete this bullet:
 
 Keep the other two roadmap bullets.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add README.md
@@ -1179,26 +1183,26 @@ git commit -m "docs(expo-google-signin): document web support"
 
 Confirm the whole test suite is green and the plugin still builds.
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `npm test`
 Expected: PASS (all existing tests + 5 decodeIdToken tests + 18 web tests).
 
-- [ ] **Step 2: Type-check the package**
+- [x] **Step 2: Type-check the package**
 
 Run: `npx tsc --noEmit -p tsconfig.json`
 Expected: no errors.
 
-- [ ] **Step 3: Build the config plugin**
+- [x] **Step 3: Build the config plugin**
 
 Run: `npm run build:plugin`
 Expected: completes without errors — confirms nothing in the web work broke the plugin tsconfig.
 
-- [ ] **Step 4: Final sanity grep**
+- [x] **Step 4: Final sanity grep**
 
 Run: `git grep -nE "TODO|TBD|FIXME" src/ docs/superpowers/specs/`
 Expected: no matches.
 
-- [ ] **Step 5: No commit needed**
+- [x] **Step 5: No commit needed**
 
 If all checks passed, the implementation is complete. The branch is ready for review.

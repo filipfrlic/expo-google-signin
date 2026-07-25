@@ -173,6 +173,19 @@ Some bundlers create multiple module realms (Metro hot reload, certain test runn
 - Additional OAuth scopes + `accessToken` for Drive/Calendar/etc.
 - Server auth code for offline access
 
+## Development
+
+```bash
+npm install       # also compiles the config plugin via `prepare`
+npm test          # jest
+npm run typecheck # tsc --noEmit
+```
+
+Native Android and iOS code has no automated coverage — CI runs the TypeScript suite
+only, so changes under `android/src` or `ios/` need a manual build against a real app.
+
+Released versions are listed in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT © Filip Frlic

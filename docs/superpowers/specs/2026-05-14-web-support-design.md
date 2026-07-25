@@ -1,7 +1,7 @@
 # Web support for @filipfrlic/expo-google-signin
 
 Date: 2026-05-14
-Status: Approved
+Status: Implemented — shipped in 0.2.0
 
 ## Goal
 
