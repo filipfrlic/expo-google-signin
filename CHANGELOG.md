@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the browser blocks it and it rejects with `ERR_NETWORK`.
   - Requires a prior `signIn()`; iOS rejects with `ERR_NO_CREDENTIAL` without one.
 - `AuthorizeOptions` and `AuthorizationResult` types.
+- `authorize()` pins consent to the signed-in account, so a multi-account device
+  cannot grant scopes for a different account than `signIn()` returned. iOS acts
+  on the current user, Android sets the account on the request, and web passes
+  `login_hint`. The Android pin is in-memory: after a process restart it is unset
+  until `signIn()` or `getCurrentUser()` repopulates it.
+- A configured `hostedDomain` is now applied to the authorization request on
+  Android (`filterByHostedDomain`) and web (`hd`), matching `signIn()`.
 - Android dependency on `com.google.android.gms:play-services-auth`, which
   provides the `AuthorizationClient` that issues access tokens — Credential
   Manager returns ID tokens only.

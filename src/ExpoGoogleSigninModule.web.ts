@@ -191,6 +191,8 @@ const authorize = async (options: AuthorizeOptions): Promise<AuthorizationResult
     clientId: config.webClientId,
     scopes: options.scopes,
     hostedDomain: config.hostedDomain,
+    // Pin consent to the signed-in account, matching what native does.
+    loginHint: readCached()?.user.email,
   });
 };
 

@@ -34,6 +34,7 @@ export type OAuth2Namespace = {
     scope: string;
     callback: (response: TokenResponse) => void;
     error_callback?: (error: TokenError) => void;
+    login_hint?: string;
     hd?: string;
   }) => TokenClient;
 };
@@ -53,7 +54,13 @@ const toResult = (response: TokenResponse): AuthorizationResult => ({
 
 export const requestAccessToken = (
   oauth2: OAuth2Namespace,
-  options: { clientId: string; scopes: string[]; hostedDomain?: string }
+  options: {
+    clientId: string;
+    scopes: string[];
+    hostedDomain?: string;
+    /** Email of the signed-in user; skips account selection when it matches. */
+    loginHint?: string;
+  }
 ): Promise<AuthorizationResult> =>
   new Promise<AuthorizationResult>((resolve, reject) => {
     let settled = false;
@@ -66,6 +73,7 @@ export const requestAccessToken = (
     const client = oauth2.initTokenClient({
       client_id: options.clientId,
       scope: options.scopes.join(' '),
+      login_hint: options.loginHint,
       hd: options.hostedDomain,
       callback: (response) => {
         settle(() => {

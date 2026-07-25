@@ -1,5 +1,6 @@
 package expo.modules.googlesignin
 
+import android.accounts.Account
 import android.app.Activity
 import android.content.IntentSender
 import android.os.Bundle
@@ -36,6 +37,9 @@ private object Err {
 
 private const val AUTHORIZE_REQUEST_CODE = 0x6753
 
+/** AccountManager type for Google accounts. */
+private const val GOOGLE_ACCOUNT_TYPE = "com.google"
+
 class ExpoGoogleSigninModule : Module() {
     private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var webClientId: String? = null
@@ -45,6 +49,13 @@ class ExpoGoogleSigninModule : Module() {
     // Written on the caller's thread, read on main — hence @Volatile.
     @Volatile
     private var pendingAuthorize: Promise? = null
+
+    // Email of the last account that signed in, used to pin authorize() to the
+    // same account. In-memory only: after a process restart it is null until
+    // signIn() or getCurrentUser() runs again, and authorize() then falls back
+    // to letting the user pick.
+    @Volatile
+    private var lastAccountEmail: String? = null
 
     override fun definition() = ModuleDefinition {
         Name("ExpoGoogleSignin")
@@ -91,6 +102,7 @@ class ExpoGoogleSigninModule : Module() {
                         return@launch
                     }
                     val google = GoogleIdTokenCredential.createFrom(cred.data)
+                    lastAccountEmail = google.id
                     promise.resolve(buildResult(google))
                 } catch (_: GetCredentialCancellationException) {
                     promise.reject(Err.SIGN_IN_CANCELLED, "user cancelled", null)
@@ -123,9 +135,13 @@ class ExpoGoogleSigninModule : Module() {
                 )
             }
 
-            val request = AuthorizationRequest.builder()
+            val builder = AuthorizationRequest.builder()
                 .setRequestedScopes(options.scopes.map { Scope(it) })
-                .build()
+            // Pin consent to the account that signed in, so a multi-account device
+            // cannot authorize a different one than signIn() returned.
+            lastAccountEmail?.let { builder.setAccount(Account(it, GOOGLE_ACCOUNT_TYPE)) }
+            hostedDomain?.let { builder.filterByHostedDomain(it) }
+            val request = builder.build()
 
             Identity.getAuthorizationClient(activity)
                 .authorize(request)
@@ -188,6 +204,7 @@ class ExpoGoogleSigninModule : Module() {
             val ctx = appContext.reactContext
                 ?: return@AsyncFunction promise.reject(Err.UNKNOWN, "no react context", null)
             val cm = CredentialManager.create(ctx)
+            lastAccountEmail = null
             moduleScope.launch {
                 try {
                     cm.clearCredentialState(ClearCredentialStateRequest())
@@ -227,6 +244,7 @@ class ExpoGoogleSigninModule : Module() {
                         return@launch
                     }
                     val google = GoogleIdTokenCredential.createFrom(cred.data)
+                    lastAccountEmail = google.id
                     promise.resolve(buildResult(google))
                 } catch (_: GetCredentialCancellationException) {
                     promise.resolve(null)

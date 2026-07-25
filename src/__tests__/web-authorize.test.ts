@@ -3,11 +3,14 @@
  */
 
 import {
+  SESSION_KEY,
+  farFutureExp,
   fireTokenError,
   fireTokenResponse,
   flushAsync,
   initTokenClientFn,
   loadModule,
+  makeJwt,
   requestAccessTokenFn,
   setupGisHarness,
   simulateGisLoadFailure,
@@ -68,6 +71,46 @@ describe('authorize', () => {
 
     expect(initTokenClientFn).toHaveBeenCalledWith(
       expect.objectContaining({ hd: 'example.com' })
+    );
+
+    fireTokenResponse({ access_token: 't', expires_in: 60, scope: DRIVE });
+    await pending;
+  });
+
+  it('pins consent to the signed-in account via login_hint', async () => {
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        idToken: makeJwt({ sub: 'x', email: 'jane@example.com', exp: farFutureExp }),
+        user: {
+          id: 'x',
+          email: 'jane@example.com',
+          name: null,
+          givenName: null,
+          familyName: null,
+          photo: null,
+        },
+      })
+    );
+    const mod = configured();
+    const pending = mod.authorize({ scopes: [DRIVE] });
+    await flushAsync();
+
+    expect(initTokenClientFn).toHaveBeenCalledWith(
+      expect.objectContaining({ login_hint: 'jane@example.com' })
+    );
+
+    fireTokenResponse({ access_token: 't', expires_in: 60, scope: DRIVE });
+    await pending;
+  });
+
+  it('omits login_hint when no session is cached', async () => {
+    const mod = configured();
+    const pending = mod.authorize({ scopes: [DRIVE] });
+    await flushAsync();
+
+    expect(initTokenClientFn).toHaveBeenCalledWith(
+      expect.objectContaining({ login_hint: undefined })
     );
 
     fireTokenResponse({ access_token: 't', expires_in: 60, scope: DRIVE });
