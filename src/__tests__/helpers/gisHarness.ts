@@ -18,6 +18,10 @@ export const promptFn = jest.fn();
 export const renderButtonFn = jest.fn();
 export const disableAutoSelectFn = jest.fn();
 
+// google.accounts.oauth2 — the access-token namespace, separate from accounts.id.
+export const initTokenClientFn = jest.fn();
+export const requestAccessTokenFn = jest.fn();
+
 /** Mutable per-test state, populated by the hooks `setupGisHarness` installs. */
 export const harness = {
   appendSpy: undefined as unknown as jest.SpyInstance,
@@ -33,6 +37,9 @@ function installGisGlobal() {
         renderButton: renderButtonFn,
         disableAutoSelect: disableAutoSelectFn,
       },
+      oauth2: {
+        initTokenClient: initTokenClientFn,
+      },
     },
   };
 }
@@ -45,6 +52,10 @@ export function setupGisHarness() {
     promptFn.mockReset();
     renderButtonFn.mockReset();
     disableAutoSelectFn.mockReset();
+    initTokenClientFn.mockReset();
+    requestAccessTokenFn.mockReset();
+    // initTokenClient returns the client whose requestAccessToken starts the flow.
+    initTokenClientFn.mockReturnValue({ requestAccessToken: requestAccessTokenFn });
     sessionStorage.clear();
     delete (window as unknown as { google?: unknown }).google;
     harness.injectedScript = undefined;
@@ -87,6 +98,11 @@ type WebModule = {
   signIn: (opts: { nonce?: string }) => Promise<{ idToken: string; user: unknown }>;
   signOut: () => Promise<void>;
   getCurrentUser: () => Promise<{ idToken: string; user: unknown } | null>;
+  authorize: (opts: { scopes: string[] }) => Promise<{
+    accessToken: string;
+    grantedScopes: string[];
+    expiresAt: number | null;
+  }>;
 };
 
 export function loadModule(): WebModule {
@@ -125,8 +141,13 @@ export const makeJwt = (payload: Record<string, unknown>) =>
 
 export const farFutureExp = Math.floor(Date.now() / 1000) + 3600;
 
-/** Let the stubbed script `onload` (and anything else queued) run. */
-export const flushMicrotasks = () => new Promise<void>((r) => queueMicrotask(r));
+/**
+ * Let the stubbed script `onload` and every chained promise settle.
+ *
+ * Deliberately a macrotask: it drains the whole microtask queue, so tests do not
+ * encode how many `await`s deep the implementation happens to be.
+ */
+export const flushAsync = () => new Promise<void>((r) => setTimeout(r, 0));
 
 /** Invoke the credential callback passed to the most recent `initialize` call. */
 export function fireCredential(jwt: string) {
@@ -134,6 +155,26 @@ export function fireCredential(jwt: string) {
   const initCall = calls[calls.length - 1];
   const config = initCall?.[0] as { callback: (r: { credential: string }) => void };
   config.callback({ credential: jwt });
+}
+
+type TokenClientConfig = {
+  callback: (r: Record<string, unknown>) => void;
+  error_callback?: (e: Record<string, unknown>) => void;
+};
+
+const lastTokenClientConfig = (): TokenClientConfig => {
+  const calls = initTokenClientFn.mock.calls;
+  return calls[calls.length - 1]?.[0] as TokenClientConfig;
+};
+
+/** Deliver a token response to the most recent token client. */
+export function fireTokenResponse(response: Record<string, unknown>) {
+  lastTokenClientConfig().callback(response);
+}
+
+/** Deliver a non-OAuth failure (popup blocked/closed) to the token client. */
+export function fireTokenError(error: Record<string, unknown>) {
+  lastTokenClientConfig().error_callback?.(error);
 }
 
 /** Invoke the listener passed to the most recent `prompt` call. */

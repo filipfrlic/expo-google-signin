@@ -6,7 +6,7 @@ import {
   SESSION_KEY,
   farFutureExp,
   fireCredential,
-  flushMicrotasks,
+  flushAsync,
   initializeFn,
   loadButton,
   loadModule,
@@ -41,7 +41,7 @@ describe('renderGoogleSignInButton', () => {
       logo_alignment: 'center',
       width: 240,
     });
-    await flushMicrotasks();
+    await flushAsync();
     expect(renderButtonFn).toHaveBeenCalledWith(
       element,
       expect.objectContaining({
@@ -62,7 +62,7 @@ describe('renderGoogleSignInButton', () => {
     const onSuccess = jest.fn();
     const onError = jest.fn();
     renderGoogleSignInButton(document.createElement('div'), { onSuccess, onError });
-    await flushMicrotasks();
+    await flushAsync();
     const jwt = makeJwt({
       sub: 'user-42',
       email: 'a@b.com',
@@ -97,7 +97,7 @@ describe('renderGoogleSignInButton', () => {
     const onSuccess = jest.fn();
     const onError = jest.fn();
     renderGoogleSignInButton(document.createElement('div'), { onSuccess, onError });
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(
       makeJwt({ sub: 'x', email: 'y@other.com', hd: 'other.com', exp: farFutureExp })
     );
@@ -116,7 +116,7 @@ describe('renderGoogleSignInButton', () => {
       onSuccess: jest.fn(),
       nonce: 'hashed-nonce-xyz',
     });
-    await flushMicrotasks();
+    await flushAsync();
     expect(initializeFn).toHaveBeenCalledWith(
       expect.objectContaining({ nonce: 'hashed-nonce-xyz' })
     );
@@ -143,7 +143,7 @@ describe('renderGoogleSignInButton', () => {
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const renderGoogleSignInButton = loadButton();
     renderGoogleSignInButton(document.createElement('div'), { onSuccess: jest.fn() });
-    await flushMicrotasks();
+    await flushAsync();
     const jwt = makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp });
     fireCredential(jwt);
     expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
@@ -169,7 +169,7 @@ describe('renderGoogleSignInButton', () => {
     const renderGoogleSignInButton = loadButton();
     const onSuccess = jest.fn();
     const unmount = renderGoogleSignInButton(document.createElement('div'), { onSuccess });
-    await flushMicrotasks();
+    await flushAsync();
     unmount();
     fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
     expect(onSuccess).not.toHaveBeenCalled();

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `authorize({ scopes })` — requests OAuth scopes and returns
+  `{ accessToken, grantedScopes, expiresAt }` for calling Google APIs. Works on
+  iOS, Android, and web.
+  - `grantedScopes` may be a **subset** of the requested scopes; Google supports
+    granular consent, so check it rather than assuming a full grant.
+  - `expiresAt` is epoch milliseconds, or `null` when the platform reports no
+    expiry — always `null` on Android, whose `AuthorizationResult` has no expiry
+    field. The package stores no token state; call `authorize()` again to renew.
+  - On web this opens a popup and must be called from a user gesture, otherwise
+    the browser blocks it and it rejects with `ERR_NETWORK`.
+  - Requires a prior `signIn()`; iOS rejects with `ERR_NO_CREDENTIAL` without one.
+- `AuthorizeOptions` and `AuthorizationResult` types.
+- Android dependency on `com.google.android.gms:play-services-auth`, which
+  provides the `AuthorizationClient` that issues access tokens — Credential
+  Manager returns ID tokens only.
+
 ### Fixed
 
 - `ErrorCode` exhaustiveness check in `src/errors.ts` is now enforced. The type-level

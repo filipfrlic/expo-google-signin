@@ -5,17 +5,19 @@ jest.mock('../ExpoGoogleSigninModule', () => ({
     signIn: jest.fn(),
     signOut: jest.fn(),
     getCurrentUser: jest.fn(),
+    authorize: jest.fn(),
   },
 }));
 
 import NativeModule from '../ExpoGoogleSigninModule';
-import { configure, signIn, signOut, getCurrentUser } from '../index';
+import { configure, signIn, signOut, getCurrentUser, authorize } from '../index';
 
 const native = NativeModule as unknown as {
   configure: jest.Mock;
   signIn: jest.Mock;
   signOut: jest.Mock;
   getCurrentUser: jest.Mock;
+  authorize: jest.Mock;
 };
 
 beforeEach(() => {
@@ -23,6 +25,7 @@ beforeEach(() => {
   native.signIn.mockReset();
   native.signOut.mockReset();
   native.getCurrentUser.mockReset();
+  native.authorize.mockReset();
 });
 
 describe('configure', () => {
@@ -121,6 +124,66 @@ describe('getCurrentUser', () => {
     await expect(getCurrentUser()).rejects.toMatchObject({
       name: 'GoogleSigninError',
       code: 'ERR_UNKNOWN',
+    });
+  });
+});
+
+describe('authorize', () => {
+  const DRIVE = 'https://www.googleapis.com/auth/drive.readonly';
+
+  it('returns the authorization result from the native module', async () => {
+    native.authorize.mockResolvedValueOnce({
+      accessToken: 'ya29.token',
+      grantedScopes: [DRIVE],
+      expiresAt: 1893456000000,
+    });
+    const result = await authorize({ scopes: [DRIVE] });
+    expect(result).toEqual({
+      accessToken: 'ya29.token',
+      grantedScopes: [DRIVE],
+      expiresAt: 1893456000000,
+    });
+    expect(native.authorize).toHaveBeenCalledWith({ scopes: [DRIVE] });
+  });
+
+  it('accepts a null expiresAt, as Android always returns', async () => {
+    native.authorize.mockResolvedValueOnce({
+      accessToken: 'ya29.token',
+      grantedScopes: [DRIVE],
+      expiresAt: null,
+    });
+    await expect(authorize({ scopes: [DRIVE] })).resolves.toMatchObject({
+      expiresAt: null,
+    });
+  });
+
+  it('throws without calling native when scopes are empty', async () => {
+    await expect(authorize({ scopes: [] })).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_UNKNOWN',
+    });
+    expect(native.authorize).not.toHaveBeenCalled();
+  });
+
+  it('maps a denied consent to ERR_SIGN_IN_CANCELLED', async () => {
+    native.authorize.mockRejectedValueOnce({
+      code: 'ERR_SIGN_IN_CANCELLED',
+      message: 'user cancelled authorization',
+    });
+    await expect(authorize({ scopes: [DRIVE] })).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_SIGN_IN_CANCELLED',
+    });
+  });
+
+  it('maps a missing signed-in user to ERR_NO_CREDENTIAL', async () => {
+    native.authorize.mockRejectedValueOnce({
+      code: 'ERR_NO_CREDENTIAL',
+      message: 'call signIn() first',
+    });
+    await expect(authorize({ scopes: [DRIVE] })).rejects.toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_NO_CREDENTIAL',
     });
   });
 });

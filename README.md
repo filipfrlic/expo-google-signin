@@ -120,6 +120,62 @@ Calling this on iOS or Android throws `GoogleSigninError('ERR_UNKNOWN', ...)`; i
 
 Most production web apps render this button as the primary sign-in UI and treat One Tap as a silent fast-path optimization.
 
+## Scopes and access tokens
+
+`signIn()` gives you an ID token, which proves *who* the user is. To call Google APIs on their behalf — Drive, Calendar, Gmail — you need an **access token** with explicit scopes. That's `authorize()`:
+
+```ts
+import { authorize } from '@filipfrlic/expo-google-signin';
+
+const { accessToken, grantedScopes, expiresAt } = await authorize({
+  scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+});
+
+await fetch('https://www.googleapis.com/drive/v3/files', {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
+Scopes are full URLs, exactly as they appear in [Google's OAuth scope list](https://developers.google.com/identity/protocols/oauth2/scopes).
+
+Three things to get right:
+
+- **Call `signIn()` first.** `authorize()` grants scopes for a signed-in user. On iOS it throws `ERR_NO_CREDENTIAL` without one.
+- **On web, call it from a click handler.** It opens a popup, and browsers block popups that don't originate from a user gesture. A blocked popup surfaces as `ERR_NETWORK`. Don't call it on page load or in a `useEffect`.
+- **Check `grantedScopes`.** Google supports granular consent — users can approve some scopes and refuse others — so a resolved promise does not mean you got everything you asked for.
+
+```ts
+const { grantedScopes } = await authorize({ scopes: [DRIVE, CALENDAR] });
+
+if (!grantedScopes.includes(CALENDAR)) {
+  // user approved Drive only — degrade gracefully
+}
+```
+
+### Token expiry
+
+`expiresAt` is epoch milliseconds, or `null` when the platform doesn't report one. **Android is always `null`** — its `AuthorizationResult` exposes no expiry — so treat `null` as "unknown" and re-authorize when an API call returns 401.
+
+The package holds no token state. When a token expires, call `authorize()` again: it's silent on iOS and Android once consent exists, and a fast popup on web.
+
+```ts
+if (expiresAt === null || Date.now() >= expiresAt) {
+  ({ accessToken } = await authorize({ scopes: [DRIVE] }));
+}
+```
+
+### Platform notes
+
+Access tokens come from a different API than ID tokens on two of the three platforms, which is why this is a separate call rather than an option on `signIn()`:
+
+| | Source | Extra consent UI |
+|---|---|---|
+| iOS | `addScopes` on the GoogleSignIn SDK | Only for new scopes |
+| Android | `AuthorizationClient` (Credential Manager issues ID tokens only) | Only for new scopes |
+| Web | `google.accounts.oauth2` token client | Popup, every time |
+
+**Web has no refresh token.** The browser flow is the OAuth implicit grant, which returns an access token and nothing else. Every renewal is another popup needing another user gesture. If your web app needs unattended Google API access, do it from your backend with a server auth code rather than from the browser.
+
 ## Errors
 
 Errors thrown by this package are `GoogleSigninError` with a typed `code`:
@@ -170,7 +226,6 @@ Some bundlers create multiple module realms (Metro hot reload, certain test runn
 
 ## Roadmap
 
-- Additional OAuth scopes + `accessToken` for Drive/Calendar/etc.
 - Server auth code for offline access
 
 ## Development

@@ -1,6 +1,12 @@
 import NativeModule from './ExpoGoogleSigninModule';
 import { GoogleSigninError, mapNativeError } from './errors';
-import type { ConfigureOptions, SignInOptions, SignInResult } from './types';
+import type {
+  AuthorizationResult,
+  AuthorizeOptions,
+  ConfigureOptions,
+  SignInOptions,
+  SignInResult,
+} from './types';
 
 export type {
   GoogleUser,
@@ -8,6 +14,8 @@ export type {
   ConfigureOptions,
   SignInOptions,
   SignInButtonOptions,
+  AuthorizeOptions,
+  AuthorizationResult,
   ErrorCode,
 } from './types';
 
@@ -43,6 +51,28 @@ export const signIn = async (options: SignInOptions = {}): Promise<SignInResult>
 export const getCurrentUser = async (): Promise<SignInResult | null> => {
   try {
     return await NativeModule.getCurrentUser();
+  } catch (e) {
+    throw mapNativeError(e);
+  }
+};
+
+/**
+ * Request OAuth scopes and an access token for calling Google APIs.
+ *
+ * Call `signIn()` first. On web this opens a popup, so it must be invoked from a
+ * user gesture (a click handler) or the browser will block it.
+ */
+export const authorize = async (
+  options: AuthorizeOptions
+): Promise<AuthorizationResult> => {
+  if (!options || !options.scopes || options.scopes.length === 0) {
+    throw new GoogleSigninError(
+      'ERR_UNKNOWN',
+      'authorize() requires at least one scope'
+    );
+  }
+  try {
+    return await NativeModule.authorize(options);
   } catch (e) {
     throw mapNativeError(e);
   }

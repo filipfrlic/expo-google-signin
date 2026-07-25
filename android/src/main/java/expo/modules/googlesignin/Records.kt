@@ -11,3 +11,7 @@ class ConfigureOptions : Record {
 class SignInOptions : Record {
     @Field var nonce: String? = null
 }
+
+class AuthorizeOptions : Record {
+    @Field var scopes: List<String> = emptyList()
+}

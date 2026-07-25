@@ -1,4 +1,6 @@
 import type {
+  AuthorizationResult,
+  AuthorizeOptions,
   ConfigureOptions,
   SignInButtonOptions,
   SignInOptions,
@@ -7,6 +9,7 @@ import type {
 import { loadGis } from './web/loadGis';
 import { decodeIdToken } from './web/decodeIdToken';
 import { writeCached, clearCached, readCached } from './web/storage';
+import { requestAccessToken, type OAuth2Namespace } from './web/tokenClient';
 import { GoogleSigninError } from './errors';
 
 type Moment = {
@@ -38,6 +41,7 @@ type Google = {
       ) => void;
       disableAutoSelect: () => void;
     };
+    oauth2: OAuth2Namespace;
   };
 };
 
@@ -125,7 +129,8 @@ const configure = (options: ConfigureOptions): void => {
   void loadGis();
 };
 
-const signIn = async (options: SignInOptions): Promise<SignInResult> => {
+/** Assert configure() ran, wait for GIS, and hand back the loaded namespace. */
+const requireGis = async (): Promise<{ google: Google; config: ConfigureOptions }> => {
   if (!configured) {
     throw new GoogleSigninError('ERR_NOT_CONFIGURED', 'configure() was not called');
   }
@@ -139,6 +144,11 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   if (!google) {
     throw new GoogleSigninError('ERR_UNKNOWN', 'Google Identity Services failed to load');
   }
+  return { google, config };
+};
+
+const signIn = async (options: SignInOptions): Promise<SignInResult> => {
+  const { google, config } = await requireGis();
   return new Promise<SignInResult>((resolve, reject) => {
     let settled = false;
     initializeGis(google, config, options.nonce, (credential) => {
@@ -170,6 +180,18 @@ const signOut = async (): Promise<void> => {
 
 const getCurrentUser = async (): Promise<SignInResult | null> => {
   return readCached();
+};
+
+const authorize = async (options: AuthorizeOptions): Promise<AuthorizationResult> => {
+  if (!options?.scopes?.length) {
+    throw new GoogleSigninError('ERR_UNKNOWN', 'authorize() requires at least one scope');
+  }
+  const { google, config } = await requireGis();
+  return requestAccessToken(google.accounts.oauth2, {
+    clientId: config.webClientId,
+    scopes: options.scopes,
+    hostedDomain: config.hostedDomain,
+  });
 };
 
 export const renderGoogleSignInButton = (
@@ -225,4 +247,4 @@ export const renderGoogleSignInButton = (
   return unmount;
 };
 
-export default { configure, signIn, signOut, getCurrentUser };
+export default { configure, signIn, signOut, getCurrentUser, authorize };

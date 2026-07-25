@@ -31,7 +31,18 @@ Anything added to one must be added to the other, even if the other only throws.
 
 **Web helpers** live in `src/web/` — `loadGis` (script injection, idempotent),
 `storage` (`sessionStorage` cache with an `exp` check), `decodeIdToken` (base64url
-JWT payload decode). Keep them dependency-free and independently testable.
+JWT payload decode), `tokenClient` (access tokens). Keep them dependency-free and
+independently testable.
+
+**ID tokens and access tokens come from different APIs.** Only iOS issues both
+from one SDK. Android gets ID tokens from Credential Manager and access tokens
+from `AuthorizationClient` (play-services-auth), which may need a second consent
+UI delivered as a `PendingIntent` — hence the `OnActivityResult` handler and the
+`pendingAuthorize` field in the Android module. Web gets ID tokens from
+`google.accounts.id` and access tokens from `google.accounts.oauth2`, a separate
+namespace whose popup requires a user gesture. This asymmetry is why `authorize()`
+is its own function rather than an option on `signIn()`; don't "simplify" it back
+into one call.
 
 **Errors.** Everything thrown crosses `mapNativeError` and surfaces as
 `GoogleSigninError` with a stable `code`. Adding a code means updating both the

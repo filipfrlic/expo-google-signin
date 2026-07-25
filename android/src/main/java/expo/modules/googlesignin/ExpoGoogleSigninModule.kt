@@ -1,14 +1,19 @@
 package expo.modules.googlesignin
 
 import android.app.Activity
+import android.content.IntentSender
 import android.os.Bundle
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.AuthorizationResult
+import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.common.api.Scope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -29,10 +34,17 @@ private object Err {
     const val UNKNOWN = "ERR_UNKNOWN"
 }
 
+private const val AUTHORIZE_REQUEST_CODE = 0x6753
+
 class ExpoGoogleSigninModule : Module() {
     private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var webClientId: String? = null
     private var hostedDomain: String? = null
+
+    // Held while the consent UI is in front; resolved from OnActivityResult.
+    // Written on the caller's thread, read on main — hence @Volatile.
+    @Volatile
+    private var pendingAuthorize: Promise? = null
 
     override fun definition() = ModuleDefinition {
         Name("ExpoGoogleSignin")
@@ -90,6 +102,87 @@ class ExpoGoogleSigninModule : Module() {
             }
         }
 
+        // Credential Manager issues ID tokens only; OAuth scopes and access tokens
+        // come from AuthorizationClient, which may need its own consent UI.
+        AsyncFunction("authorize") { options: AuthorizeOptions, promise: Promise ->
+            val activity: Activity = appContext.currentActivity
+                ?: return@AsyncFunction promise.reject(Err.UNKNOWN, "no foreground activity", null)
+            if (options.scopes.isEmpty()) {
+                return@AsyncFunction promise.reject(
+                    Err.UNKNOWN,
+                    "authorize() requires at least one scope",
+                    null
+                )
+            }
+            val playServices = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
+            if (playServices != ConnectionResult.SUCCESS) {
+                return@AsyncFunction promise.reject(
+                    Err.PLAY_SERVICES_UNAVAILABLE,
+                    "Google Play Services unavailable (code=$playServices)",
+                    null
+                )
+            }
+
+            val request = AuthorizationRequest.builder()
+                .setRequestedScopes(options.scopes.map { Scope(it) })
+                .build()
+
+            Identity.getAuthorizationClient(activity)
+                .authorize(request)
+                .addOnSuccessListener { result ->
+                    if (!result.hasResolution()) {
+                        // Scopes already granted — no UI needed.
+                        resolveAuthorization(result, promise)
+                        return@addOnSuccessListener
+                    }
+                    val pendingIntent = result.pendingIntent
+                    if (pendingIntent == null) {
+                        promise.reject(
+                            Err.UNKNOWN,
+                            "authorization needs consent but no PendingIntent was returned",
+                            null
+                        )
+                        return@addOnSuccessListener
+                    }
+                    // A second authorize() while one is in flight abandons the first.
+                    pendingAuthorize?.reject(Err.UNKNOWN, "superseded by another authorize() call", null)
+                    pendingAuthorize = promise
+                    try {
+                        activity.startIntentSenderForResult(
+                            pendingIntent.intentSender,
+                            AUTHORIZE_REQUEST_CODE,
+                            null,
+                            0,
+                            0,
+                            0
+                        )
+                    } catch (e: IntentSender.SendIntentException) {
+                        pendingAuthorize = null
+                        promise.reject(Err.UNKNOWN, e.message ?: "could not launch consent UI", e)
+                    }
+                }
+                .addOnFailureListener { e ->
+                    promise.reject(Err.UNKNOWN, e.message ?: "authorize failed", e)
+                }
+        }
+
+        OnActivityResult { activity, payload ->
+            if (payload.requestCode != AUTHORIZE_REQUEST_CODE) return@OnActivityResult
+            val promise = pendingAuthorize ?: return@OnActivityResult
+            pendingAuthorize = null
+            if (payload.resultCode != Activity.RESULT_OK) {
+                promise.reject(Err.SIGN_IN_CANCELLED, "user cancelled authorization", null)
+                return@OnActivityResult
+            }
+            try {
+                val result = Identity.getAuthorizationClient(activity)
+                    .getAuthorizationResultFromIntent(payload.data)
+                resolveAuthorization(result, promise)
+            } catch (e: Exception) {
+                promise.reject(Err.UNKNOWN, e.message ?: "authorize failed", e)
+            }
+        }
+
         AsyncFunction("signOut") { promise: Promise ->
             // signOut works while backgrounded — Application context is sufficient for clearCredentialState (no Activity needed).
             val ctx = appContext.reactContext
@@ -144,6 +237,23 @@ class ExpoGoogleSigninModule : Module() {
                 }
             }
         }
+    }
+
+    private fun resolveAuthorization(result: AuthorizationResult, promise: Promise) {
+        val accessToken = result.accessToken
+        if (accessToken == null) {
+            promise.reject(Err.UNKNOWN, "authorization returned no access token", null)
+            return
+        }
+        // AuthorizationResult carries no expiry, so expiresAt is always null here —
+        // callers re-authorize when an API call comes back 401.
+        promise.resolve(
+            mapOf(
+                "accessToken" to accessToken,
+                "grantedScopes" to result.grantedScopes,
+                "expiresAt" to null
+            )
+        )
     }
 
     private fun buildResult(c: GoogleIdTokenCredential): Bundle {

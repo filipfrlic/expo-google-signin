@@ -11,8 +11,13 @@ struct SignInOptions: Record {
     @Field var nonce: String?
 }
 
+struct AuthorizeOptions: Record {
+    @Field var scopes: [String] = []
+}
+
 private enum Err {
     static let signInCancelled = "ERR_SIGN_IN_CANCELLED"
+    static let noCredential = "ERR_NO_CREDENTIAL"
     static let network = "ERR_NETWORK"
     static let notConfigured = "ERR_NOT_CONFIGURED"
     static let unknown = "ERR_UNKNOWN"
@@ -71,6 +76,55 @@ public class ExpoGoogleSigninModule: Module {
             }
         }
 
+        AsyncFunction("authorize") { (options: AuthorizeOptions, promise: Promise) in
+            DispatchQueue.main.async {
+                guard GIDSignIn.sharedInstance.configuration != nil else {
+                    return promise.reject(Err.notConfigured, "configure() not called or iosClientId unresolved")
+                }
+                guard !options.scopes.isEmpty else {
+                    return promise.reject(Err.unknown, "authorize() requires at least one scope")
+                }
+                guard let presenter = Self.topViewController() else {
+                    return promise.reject(Err.unknown, "no presenting view controller")
+                }
+
+                let addScopes: (GIDGoogleUser) -> Void = { user in
+                    user.addScopes(options.scopes, presenting: presenter) { result, error in
+                        if let error = error as NSError? {
+                            // Already-granted scopes are a success: the current
+                            // user's token already covers the request.
+                            if error.code == GIDSignInError.scopesAlreadyGranted.rawValue {
+                                return Self.resolveAuthorization(user: user, promise: promise)
+                            }
+                            if error.code == GIDSignInError.canceled.rawValue {
+                                return promise.reject(Err.signInCancelled, "user cancelled")
+                            }
+                            if error.domain == NSURLErrorDomain {
+                                return promise.reject(Err.network, error.localizedDescription)
+                            }
+                            return promise.reject(Err.unknown, error.localizedDescription)
+                        }
+                        Self.resolveAuthorization(user: result?.user ?? user, promise: promise)
+                    }
+                }
+
+                if let current = GIDSignIn.sharedInstance.currentUser {
+                    addScopes(current)
+                } else {
+                    // Mirrors getCurrentUser(): try the keychain before giving up.
+                    GIDSignIn.sharedInstance.restorePreviousSignIn { user, _ in
+                        guard let user else {
+                            return promise.reject(
+                                Err.noCredential,
+                                "authorize() requires a signed-in user — call signIn() first"
+                            )
+                        }
+                        addScopes(user)
+                    }
+                }
+            }
+        }
+
         AsyncFunction("signOut") { (promise: Promise) in
             GIDSignIn.sharedInstance.signOut()
             promise.resolve(nil)
@@ -113,6 +167,17 @@ public class ExpoGoogleSigninModule: Module {
               var top = window.rootViewController else { return nil }
         while let presented = top.presentedViewController { top = presented }
         return top
+    }
+
+    private static func resolveAuthorization(user: GIDGoogleUser, promise: Promise) {
+        let token = user.accessToken
+        // expirationDate is optional; JS receives null when absent.
+        let expiresAt = token.expirationDate.map { $0.timeIntervalSince1970 * 1000 }
+        promise.resolve([
+            "accessToken": token.tokenString,
+            "grantedScopes": user.grantedScopes ?? [],
+            "expiresAt": expiresAt,
+        ] as [String: Any?])
     }
 
     private static func buildResult(idToken: String, userId: String, email: String, user: GIDGoogleUser) -> [String: Any?] {

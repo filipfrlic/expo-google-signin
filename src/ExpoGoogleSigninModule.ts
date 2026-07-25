@@ -1,6 +1,8 @@
 import { requireNativeModule } from 'expo-modules-core';
 import { GoogleSigninError } from './errors';
 import type {
+  AuthorizationResult,
+  AuthorizeOptions,
   ConfigureOptions,
   SignInButtonOptions,
   SignInOptions,
@@ -12,6 +14,7 @@ type NativeModule = {
   signIn(options: SignInOptions): Promise<SignInResult>;
   signOut(): Promise<void>;
   getCurrentUser(): Promise<SignInResult | null>;
+  authorize(options: AuthorizeOptions): Promise<AuthorizationResult>;
 };
 
 export const renderGoogleSignInButton = (

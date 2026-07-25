@@ -9,7 +9,7 @@ import {
   farFutureExp,
   fireCredential,
   fireMoment,
-  flushMicrotasks,
+  flushAsync,
   harness,
   initializeFn,
   loadModule,
@@ -53,7 +53,7 @@ describe('signIn', () => {
       exp: farFutureExp,
     });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(jwt);
     const result = await pending;
     expect(result.idToken).toBe(jwt);
@@ -79,7 +79,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({ nonce: 'hashed-nonce-abc' });
-    await flushMicrotasks();
+    await flushAsync();
     expect(initializeFn).toHaveBeenCalledWith(
       expect.objectContaining({ nonce: 'hashed-nonce-abc' })
     );
@@ -99,7 +99,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireMoment((n) => {
       n.isDismissedMoment = () => true;
       n.getDismissedReason = () => 'cancel_called';
@@ -111,7 +111,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireMoment((n) => {
       n.isDismissedMoment = () => true;
       n.getDismissedReason = () => 'user_cancel';
@@ -123,7 +123,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireMoment((n) => {
       n.isDismissedMoment = () => true;
       n.getDismissedReason = () => 'something_weird';
@@ -135,7 +135,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireMoment((n) => {
       n.isDismissedMoment = () => true;
       n.getDismissedReason = () => 'flow_restarted';
@@ -148,7 +148,7 @@ describe('signIn', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
     fireMoment((n) => {
       n.isDismissedMoment = () => true;
@@ -164,7 +164,7 @@ describe('signIn', () => {
       hostedDomain: 'example.com',
     });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(
       makeJwt({ sub: 'x', email: 'y@other.com', hd: 'other.com', exp: farFutureExp })
     );
@@ -179,7 +179,7 @@ describe('signIn', () => {
       hostedDomain: 'example.com',
     });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(
       makeJwt({ sub: 'x', email: 'y@example.com', hd: 'example.com', exp: farFutureExp })
     );
@@ -203,7 +203,7 @@ describe('signOut', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
     await pending;
     expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull();
@@ -225,7 +225,7 @@ describe('getCurrentUser', () => {
     const mod = loadModule();
     mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
     const pending = mod.signIn({});
-    await flushMicrotasks();
+    await flushAsync();
     const jwt = makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp });
     fireCredential(jwt);
     const signed = await pending;

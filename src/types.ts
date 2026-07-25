@@ -52,6 +52,32 @@ export type SignInOptions = {
   nonce?: string;
 };
 
+export type AuthorizeOptions = {
+  /**
+   * Required. OAuth scopes to request, as full URLs — e.g.
+   * `https://www.googleapis.com/auth/drive.readonly`. Must be non-empty.
+   */
+  scopes: string[];
+};
+
+export type AuthorizationResult = {
+  /** OAuth 2.0 access token. Send as `Authorization: Bearer <token>`. */
+  accessToken: string;
+  /**
+   * Scopes the user actually granted. Google supports granular consent, so this
+   * may be a **subset** of the requested scopes — check it before calling an API
+   * rather than assuming the whole request was approved.
+   */
+  grantedScopes: string[];
+  /**
+   * Expiry as epoch milliseconds, or `null` when the platform does not report
+   * one. Android's `AuthorizationResult` exposes no expiry, so it is always
+   * `null` there; iOS and web report a real value. Treat `null` as "unknown" and
+   * re-authorize when an API call returns 401.
+   */
+  expiresAt: number | null;
+};
+
 /**
  * Options for {@link renderGoogleSignInButton}. Web-only — calling the function
  * on iOS or Android throws synchronously.
