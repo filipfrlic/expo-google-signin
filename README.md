@@ -176,9 +176,12 @@ Access tokens come from a different API than ID tokens on two of the three platf
 
 **Web has no refresh token.** The browser flow is the OAuth implicit grant, which returns an access token and nothing else. Every renewal is another popup needing another user gesture. If your web app needs unattended Google API access, do it from your backend with a server auth code rather than from the browser.
 
-**Consent is pinned to the signed-in account.** On a device with several Google accounts, `authorize()` targets the one that signed in rather than letting the consent screen drift to another: iOS operates on the current user, Android pins the account, and web passes it as a login hint. A configured `hostedDomain` is applied to the authorization request too.
+**Consent is pinned to the signed-in account — on native.** On a device with several Google accounts, `authorize()` must not let the consent screen drift to an account other than the one `signIn()` returned, because the result carries no account and the caller could never tell. iOS operates on the current user. Android pins the request to that account, and Android additionally cross-checks the account that actually granted against the pinned one, rejecting with `ERR_NO_CREDENTIAL` on a mismatch. A configured `hostedDomain` is applied to the authorization request too.
 
-The Android pin is held in memory. After the app process restarts it is unset until `signIn()` or `getCurrentUser()` runs again — so if you call `authorize()` as the very first thing after a cold start, the consent sheet may offer an account picker. Restoring the session first (which most apps do anyway) avoids it.
+Android's pin is held in memory, so a process restart clears it. Rather than authorizing unpinned, `authorize()` silently recovers the account from Credential Manager (no UI — only previously-authorized accounts), and rejects with `ERR_NO_CREDENTIAL` if it cannot. Calling `signIn()` or `getCurrentUser()` first, which most apps do anyway, makes that path moot.
+
+> [!WARNING]
+> **Web cannot make this guarantee.** GIS `login_hint` is a hint: the user can still switch accounts inside the popup, and the token response carries no account, so the browser has no way to report which one granted. If your app cares — anything that writes to a user's Drive, reads their Gmail, or attributes data to an identity — confirm it server-side: call Google's `tokeninfo`/`userinfo` endpoint with the access token and compare its `sub` to the verified ID token's `sub`.
 
 ## Errors
 

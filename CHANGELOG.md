@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- iOS and Android: `getCurrentUser()` now re-applies the `hostedDomain` gate.
+  Previously it was enforced only on a fresh `signIn()`, so a session restored
+  from the keychain (iOS) or from Credential Manager (Android) came back with no
+  domain check — an account that signed in before `hostedDomain` was configured
+  stayed usable. A restored session whose ID token carries a non-matching `hd`
+  claim now resolves to `null`. On Android the check reads the token's own
+  claim, because `GetGoogleIdOption.Builder` has no `setHostedDomainFilter` and
+  "previously authorized" does not imply "still in the domain".
+- Android: `authorize()` no longer runs without an account pin. The pin lives in
+  memory, so after a process restart it used to fall back to an account picker —
+  which could return a token for a different account than `signIn()` did, with
+  nothing in the result to reveal it. It now recovers the account silently from
+  Credential Manager and refuses if it cannot, and cross-checks the account that
+  actually granted (via `AuthorizationResult.toGoogleSignInAccount()`) against
+  the pinned one.
+
+### Changed
+
+- **Behavior:** `authorize()` on Android now rejects with `ERR_NO_CREDENTIAL`
+  when no signed-in account can be established, matching what iOS already did,
+  and with `ERR_NOT_CONFIGURED` when `configure()` was never called.
+
 ## [0.4.0] - 2026-07-25
 
 ### Added

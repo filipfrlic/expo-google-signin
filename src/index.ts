@@ -59,8 +59,11 @@ export const getCurrentUser = async (): Promise<SignInResult | null> => {
 /**
  * Request OAuth scopes and an access token for calling Google APIs.
  *
- * Call `signIn()` first. On web this opens a popup, so it must be invoked from a
- * user gesture (a click handler) or the browser will block it.
+ * Call `signIn()` first — iOS and Android reject with `ERR_NO_CREDENTIAL`
+ * without a signed-in account to pin consent to. On web this opens a popup, so
+ * it must be invoked from a user gesture (a click handler) or the browser will
+ * block it. See {@link AuthorizationResult} for what "pinned" guarantees per
+ * platform.
  */
 export const authorize = async (
   options: AuthorizeOptions

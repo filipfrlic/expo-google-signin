@@ -4,6 +4,7 @@ import android.accounts.Account
 import android.app.Activity
 import android.content.IntentSender
 import android.os.Bundle
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -40,6 +41,8 @@ private const val AUTHORIZE_REQUEST_CODE = 0x6753
 /** AccountManager type for Google accounts. */
 private const val GOOGLE_ACCOUNT_TYPE = "com.google"
 
+private const val TAG = "ExpoGoogleSignin"
+
 class ExpoGoogleSigninModule : Module() {
     private val moduleScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var webClientId: String? = null
@@ -50,10 +53,15 @@ class ExpoGoogleSigninModule : Module() {
     @Volatile
     private var pendingAuthorize: Promise? = null
 
+    // The account the in-flight consent UI was pinned to, checked against the
+    // account that actually granted when the result comes back.
+    @Volatile
+    private var pendingAuthorizeAccount: String? = null
+
     // Email of the last account that signed in, used to pin authorize() to the
-    // same account. In-memory only: after a process restart it is null until
-    // signIn() or getCurrentUser() runs again, and authorize() then falls back
-    // to letting the user pick.
+    // same account. In-memory only, so a process restart clears it — authorize()
+    // then recovers it silently from Credential Manager rather than running
+    // unpinned, and refuses outright if it cannot.
     @Volatile
     private var lastAccountEmail: String? = null
 
@@ -126,6 +134,10 @@ class ExpoGoogleSigninModule : Module() {
                     null
                 )
             }
+            val clientId = webClientId
+            if (clientId.isNullOrBlank()) {
+                return@AsyncFunction promise.reject(Err.NOT_CONFIGURED, "configure() not called", null)
+            }
             val playServices = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity)
             if (playServices != ConnectionResult.SUCCESS) {
                 return@AsyncFunction promise.reject(
@@ -135,57 +147,77 @@ class ExpoGoogleSigninModule : Module() {
                 )
             }
 
-            val builder = AuthorizationRequest.builder()
-                .setRequestedScopes(options.scopes.map { Scope(it) })
-            // Pin consent to the account that signed in, so a multi-account device
-            // cannot authorize a different one than signIn() returned.
-            lastAccountEmail?.let { builder.setAccount(Account(it, GOOGLE_ACCOUNT_TYPE)) }
-            hostedDomain?.let { builder.filterByHostedDomain(it) }
-            val request = builder.build()
+            moduleScope.launch {
+                // Consent must be pinned to a known account: unpinned, the picker
+                // can hand back a token for a different account than signIn()
+                // returned, and nothing in the result would tell the caller.
+                // lastAccountEmail is in-memory, so recover it silently after a
+                // process restart rather than authorizing blind.
+                val account = lastAccountEmail ?: recoverAccountEmail(activity, clientId)
+                if (account == null) {
+                    promise.reject(
+                        Err.NO_CREDENTIAL,
+                        "authorize() requires a signed-in user — call signIn() first",
+                        null
+                    )
+                    return@launch
+                }
+                lastAccountEmail = account
 
-            Identity.getAuthorizationClient(activity)
-                .authorize(request)
-                .addOnSuccessListener { result ->
-                    if (!result.hasResolution()) {
-                        // Scopes already granted — no UI needed.
-                        resolveAuthorization(result, promise)
-                        return@addOnSuccessListener
+                val builder = AuthorizationRequest.builder()
+                    .setRequestedScopes(options.scopes.map { Scope(it) })
+                    .setAccount(Account(account, GOOGLE_ACCOUNT_TYPE))
+                hostedDomain?.let { builder.filterByHostedDomain(it) }
+                val request = builder.build()
+
+                Identity.getAuthorizationClient(activity)
+                    .authorize(request)
+                    .addOnSuccessListener { result ->
+                        if (!result.hasResolution()) {
+                            // Scopes already granted — no UI needed.
+                            resolveAuthorization(result, account, promise)
+                            return@addOnSuccessListener
+                        }
+                        val pendingIntent = result.pendingIntent
+                        if (pendingIntent == null) {
+                            promise.reject(
+                                Err.UNKNOWN,
+                                "authorization needs consent but no PendingIntent was returned",
+                                null
+                            )
+                            return@addOnSuccessListener
+                        }
+                        // A second authorize() while one is in flight abandons the first.
+                        pendingAuthorize?.reject(Err.UNKNOWN, "superseded by another authorize() call", null)
+                        pendingAuthorize = promise
+                        pendingAuthorizeAccount = account
+                        try {
+                            activity.startIntentSenderForResult(
+                                pendingIntent.intentSender,
+                                AUTHORIZE_REQUEST_CODE,
+                                null,
+                                0,
+                                0,
+                                0
+                            )
+                        } catch (e: IntentSender.SendIntentException) {
+                            pendingAuthorize = null
+                            pendingAuthorizeAccount = null
+                            promise.reject(Err.UNKNOWN, e.message ?: "could not launch consent UI", e)
+                        }
                     }
-                    val pendingIntent = result.pendingIntent
-                    if (pendingIntent == null) {
-                        promise.reject(
-                            Err.UNKNOWN,
-                            "authorization needs consent but no PendingIntent was returned",
-                            null
-                        )
-                        return@addOnSuccessListener
+                    .addOnFailureListener { e ->
+                        promise.reject(Err.UNKNOWN, e.message ?: "authorize failed", e)
                     }
-                    // A second authorize() while one is in flight abandons the first.
-                    pendingAuthorize?.reject(Err.UNKNOWN, "superseded by another authorize() call", null)
-                    pendingAuthorize = promise
-                    try {
-                        activity.startIntentSenderForResult(
-                            pendingIntent.intentSender,
-                            AUTHORIZE_REQUEST_CODE,
-                            null,
-                            0,
-                            0,
-                            0
-                        )
-                    } catch (e: IntentSender.SendIntentException) {
-                        pendingAuthorize = null
-                        promise.reject(Err.UNKNOWN, e.message ?: "could not launch consent UI", e)
-                    }
-                }
-                .addOnFailureListener { e ->
-                    promise.reject(Err.UNKNOWN, e.message ?: "authorize failed", e)
-                }
+            }
         }
 
         OnActivityResult { activity, payload ->
             if (payload.requestCode != AUTHORIZE_REQUEST_CODE) return@OnActivityResult
             val promise = pendingAuthorize ?: return@OnActivityResult
+            val account = pendingAuthorizeAccount
             pendingAuthorize = null
+            pendingAuthorizeAccount = null
             if (payload.resultCode != Activity.RESULT_OK) {
                 promise.reject(Err.SIGN_IN_CANCELLED, "user cancelled authorization", null)
                 return@OnActivityResult
@@ -193,7 +225,7 @@ class ExpoGoogleSigninModule : Module() {
             try {
                 val result = Identity.getAuthorizationClient(activity)
                     .getAuthorizationResultFromIntent(payload.data)
-                resolveAuthorization(result, promise)
+                resolveAuthorization(result, account, promise)
             } catch (e: Exception) {
                 promise.reject(Err.UNKNOWN, e.message ?: "authorize failed", e)
             }
@@ -222,28 +254,23 @@ class ExpoGoogleSigninModule : Module() {
             if (clientId.isNullOrBlank()) {
                 return@AsyncFunction promise.reject(Err.NOT_CONFIGURED, "configure() not called", null)
             }
-            val cm = CredentialManager.create(activity)
-            // Note: GetGoogleIdOption.Builder in googleid:1.1.1 has no setHostedDomainFilter
-            // (the method exists on GetSignInWithGoogleOption.Builder used in signIn). Silent
-            // restore relies on setFilterByAuthorizedAccounts(true) — only previously-authorized
-            // accounts are returned, so a hostedDomain-gated signIn naturally restricts this path.
-            val builder = GetGoogleIdOption.Builder()
-                .setServerClientId(clientId)
-                .setFilterByAuthorizedAccounts(true)
-                .setAutoSelectEnabled(true)
-            val request = GetCredentialRequest.Builder().addCredentialOption(builder.build()).build()
-
             moduleScope.launch {
                 try {
-                    val response = cm.getCredential(activity, request)
-                    val cred = response.credential
-                    if (cred !is androidx.credentials.CustomCredential ||
-                        cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                    ) {
+                    val google = silentCredential(activity, clientId)
+                    if (google == null) {
                         promise.resolve(null)
                         return@launch
                     }
-                    val google = GoogleIdTokenCredential.createFrom(cred.data)
+                    // GetGoogleIdOption.Builder in googleid:1.1.1 has no
+                    // setHostedDomainFilter (the method exists only on the
+                    // GetSignInWithGoogleOption.Builder that signIn uses), and
+                    // setFilterByAuthorizedAccounts(true) only means "has used this
+                    // app before" — which an account that predates the hostedDomain
+                    // setting still satisfies. So gate on the token's own hd claim.
+                    if (!hostedDomainMatches(google.idToken)) {
+                        promise.resolve(null)
+                        return@launch
+                    }
                     lastAccountEmail = google.id
                     promise.resolve(buildResult(google))
                 } catch (_: GetCredentialCancellationException) {
@@ -257,10 +284,75 @@ class ExpoGoogleSigninModule : Module() {
         }
     }
 
-    private fun resolveAuthorization(result: AuthorizationResult, promise: Promise) {
+    /** True when no hostedDomain is configured, or the token's `hd` claim matches it. */
+    private fun hostedDomainMatches(idToken: String): Boolean {
+        val domain = hostedDomain ?: return true
+        return JwtDecoder.matchesHostedDomain(idToken, domain)
+    }
+
+    /**
+     * Fetch the stored Google credential without showing any UI.
+     *
+     * `setFilterByAuthorizedAccounts(true)` restricts this to accounts that have
+     * already signed in to this app, so it either restores the existing session
+     * or returns null — it can never prompt the user to pick a new account.
+     */
+    private suspend fun silentCredential(
+        activity: Activity,
+        clientId: String
+    ): GoogleIdTokenCredential? {
+        val option = GetGoogleIdOption.Builder()
+            .setServerClientId(clientId)
+            .setFilterByAuthorizedAccounts(true)
+            .setAutoSelectEnabled(true)
+            .build()
+        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        val cred = CredentialManager.create(activity).getCredential(activity, request).credential
+        if (cred !is androidx.credentials.CustomCredential ||
+            cred.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            return null
+        }
+        return GoogleIdTokenCredential.createFrom(cred.data)
+    }
+
+    /**
+     * Best-effort recovery of the signed-in account's email for authorize()'s
+     * account pin, used when the in-memory copy was lost to a process restart.
+     * Returns null rather than throwing — the caller turns that into a clear
+     * "call signIn() first" rejection.
+     */
+    private suspend fun recoverAccountEmail(activity: Activity, clientId: String): String? = try {
+        val google = silentCredential(activity, clientId)
+        if (google != null && hostedDomainMatches(google.idToken)) google.id else null
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not recover the signed-in account for authorize()", e)
+        null
+    }
+
+    private fun resolveAuthorization(
+        result: AuthorizationResult,
+        expectedAccount: String?,
+        promise: Promise
+    ) {
         val accessToken = result.accessToken
         if (accessToken == null) {
             promise.reject(Err.UNKNOWN, "authorization returned no access token", null)
+            return
+        }
+        // Confirm the grant landed on the account we pinned. This is best-effort:
+        // toGoogleSignInAccount() may report nothing, and then the setAccount pin
+        // is all we have. But when it does report a different account, hand back
+        // an error rather than a token belonging to someone the caller never
+        // signed in — the result carries no account, so nobody downstream could
+        // catch it. Emails stay out of the message; the code is what callers branch on.
+        val granted = result.toGoogleSignInAccount()?.email
+        if (expectedAccount != null && granted != null && !granted.equals(expectedAccount, ignoreCase = true)) {
+            promise.reject(
+                Err.NO_CREDENTIAL,
+                "authorization was granted to a different account than the signed-in one",
+                null
+            )
             return
         }
         // AuthorizationResult carries no expiry, so expiresAt is always null here —

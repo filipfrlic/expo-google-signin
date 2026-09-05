@@ -89,6 +89,12 @@ public class ExpoGoogleSigninModule: Module {
                 }
 
                 let addScopes: (GIDGoogleUser) -> Void = { user in
+                    guard Self.passesHostedDomain(user) else {
+                        return promise.reject(
+                            Err.noCredential,
+                            "the signed-in account is outside the configured hostedDomain"
+                        )
+                    }
                     user.addScopes(options.scopes, presenting: presenter) { result, error in
                         if let error = error as NSError? {
                             // Already-granted scopes are a success: the current
@@ -147,6 +153,12 @@ public class ExpoGoogleSigninModule: Module {
                       let email = user.profile?.email else {
                     return promise.resolve(nil)
                 }
+                // restorePreviousSignIn replays the keychain and does not re-apply
+                // the hostedDomain filter that signIn() was subject to, so a session
+                // predating the setting would otherwise come back through here.
+                guard Self.passesHostedDomain(user) else {
+                    return promise.resolve(nil)
+                }
                 promise.resolve(Self.buildResult(idToken: idToken, userId: userId, email: email, user: user))
             }
         }
@@ -159,6 +171,34 @@ public class ExpoGoogleSigninModule: Module {
             return nil
         }
         return plist["CLIENT_ID"] as? String
+    }
+
+    /// Reads claims out of an ID token *without verifying its signature*.
+    ///
+    /// Used only to re-apply the `hostedDomain` gate on paths the SDK does not
+    /// filter. Never authentication — backends still verify what they are sent.
+    private static func idTokenClaims(_ idToken: String) -> [String: Any]? {
+        let parts = idToken.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var b64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        b64 += String(repeating: "=", count: (4 - b64.count % 4) % 4)
+        guard let data = Data(base64Encoded: b64),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return claims
+    }
+
+    /// True when no `hostedDomain` is configured, or this user's ID token carries
+    /// a matching `hd` claim. Fails closed: a token that will not decode does not
+    /// pass a domain gate.
+    private static func passesHostedDomain(_ user: GIDGoogleUser) -> Bool {
+        guard let expected = GIDSignIn.sharedInstance.configuration?.hostedDomain else { return true }
+        guard let idToken = user.idToken?.tokenString,
+              let claims = idTokenClaims(idToken) else { return false }
+        return (claims["hd"] as? String) == expected
     }
 
     private static func topViewController() -> UIViewController? {

@@ -60,6 +60,19 @@ export type AuthorizeOptions = {
   scopes: string[];
 };
 
+/**
+ * The result of {@link AuthorizeOptions}.
+ *
+ * **Which account granted this token is only guaranteed on iOS and Android.**
+ * There, consent is pinned to the account that signed in — iOS operates on the
+ * current user, and Android pins the request to that account and rejects with
+ * `ERR_NO_CREDENTIAL` rather than authorizing an unpinned one. On web, GIS
+ * `login_hint` is a *hint*: the user can still switch accounts inside the
+ * popup, and the token response carries no account, so the browser cannot tell
+ * you which one granted it. If that distinction matters to your app, confirm it
+ * server-side — call Google's `tokeninfo`/`userinfo` endpoint with the access
+ * token and compare its `sub` against the verified ID token's `sub`.
+ */
 export type AuthorizationResult = {
   /** OAuth 2.0 access token. Send as `Authorization: Bearer <token>`. */
   accessToken: string;
