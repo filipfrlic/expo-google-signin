@@ -94,6 +94,12 @@ export type AuthorizationResult = {
 /**
  * Options for {@link renderGoogleSignInButton}. Web-only — calling the function
  * on iOS or Android throws synchronously.
+ *
+ * Google Identity Services allows one active consumer per page, so a rendered
+ * button and an in-flight `signIn()` cannot coexist: whichever starts last
+ * takes over, and the other is handed an `ERR_UNKNOWN` through `onError` (or a
+ * rejected promise) instead of being left waiting forever. Render the button or
+ * call `signIn()` — not both at once.
  */
 export type SignInButtonOptions = {
   /** Required. Fires with `{ idToken, user }` when the user signs in successfully. */

@@ -220,3 +220,59 @@ describe('authorize', () => {
     await expect(pending).resolves.toMatchObject({ accessToken: 'first' });
   });
 });
+
+describe('authorize: login_hint comes from the ID token', () => {
+  const cache = (idToken: string, email: string) =>
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        idToken,
+        user: {
+          id: 'x',
+          email,
+          name: null,
+          givenName: null,
+          familyName: null,
+          photo: null,
+        },
+      })
+    );
+
+  it('uses the token email, not a tampered cached user object', async () => {
+    cache(
+      makeJwt({ sub: 'x', email: 'jane@example.com', exp: farFutureExp }),
+      'attacker@evil.example'
+    );
+    const mod = configured();
+    const pending = mod.authorize({ scopes: [DRIVE] });
+    await flushAsync();
+
+    expect(initTokenClientFn).toHaveBeenCalledWith(
+      expect.objectContaining({ login_hint: 'jane@example.com' })
+    );
+
+    fireTokenResponse({ access_token: 't', expires_in: 60, scope: DRIVE });
+    await pending;
+  });
+
+  it('omits login_hint when the cached session fails the hostedDomain check', async () => {
+    cache(
+      makeJwt({ sub: 'x', email: 'y@other.com', hd: 'other.com', exp: farFutureExp }),
+      'y@other.com'
+    );
+    const mod = loadModule();
+    mod.configure({
+      webClientId: 'web.apps.googleusercontent.com',
+      hostedDomain: 'example.com',
+    });
+    const pending = mod.authorize({ scopes: [DRIVE] });
+    await flushAsync();
+
+    expect(initTokenClientFn).toHaveBeenCalledWith(
+      expect.objectContaining({ login_hint: undefined })
+    );
+
+    fireTokenResponse({ access_token: 't', expires_in: 60, scope: DRIVE });
+    await pending;
+  });
+});

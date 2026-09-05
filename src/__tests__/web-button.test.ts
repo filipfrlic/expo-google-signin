@@ -175,3 +175,46 @@ describe('renderGoogleSignInButton', () => {
     expect(onSuccess).not.toHaveBeenCalled();
   });
 });
+
+describe('renderGoogleSignInButton: GIS takeover', () => {
+  it('fires onError when a later signIn re-initializes GIS', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const renderGoogleSignInButton = loadButton();
+    const onSuccess = jest.fn();
+    const onError = jest.fn();
+    renderGoogleSignInButton(document.createElement('div'), { onSuccess, onError });
+    await flushAsync();
+
+    const pending = mod.signIn({});
+    await flushAsync();
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'GoogleSigninError', code: 'ERR_UNKNOWN' })
+    );
+
+    // The credential now belongs to signIn, not the superseded button.
+    fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
+    await expect(pending).resolves.toMatchObject({ user: { id: 'x' } });
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('does not supersede a live button when an unrelated unmount runs', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const renderGoogleSignInButton = loadButton();
+    const first = renderGoogleSignInButton(document.createElement('div'), {
+      onSuccess: jest.fn(),
+    });
+    await flushAsync();
+
+    const onSuccess = jest.fn();
+    renderGoogleSignInButton(document.createElement('div'), { onSuccess });
+    await flushAsync();
+
+    // Unmounting the superseded first button must not detach the second.
+    first();
+    fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
+    expect(onSuccess).toHaveBeenCalled();
+  });
+});

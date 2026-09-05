@@ -24,12 +24,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Credential Manager and refuses if it cannot, and cross-checks the account that
   actually granted (via `AuthorizationResult.toGoogleSignInAccount()`) against
   the pinned one.
+- Web: `getCurrentUser()` re-applies the `hostedDomain` gate, and the cached
+  `user` object is no longer trusted. Every profile field is re-derived from the
+  cached ID token and the stored copy discarded, so a stale or tampered
+  `sessionStorage` entry cannot present an identity the token does not back.
+  `authorize()`'s `login_hint` now comes from the token for the same reason.
 
 ### Changed
 
 - **Behavior:** `authorize()` on Android now rejects with `ERR_NO_CREDENTIAL`
   when no signed-in account can be established, matching what iOS already did,
   and with `ERR_NOT_CONFIGURED` when `configure()` was never called.
+- **Behavior:** on web, starting a `signIn()` while a sign-in button is mounted
+  (or vice versa) now fails the displaced one with `ERR_UNKNOWN` instead of
+  leaving it pending forever. `google.accounts.id.initialize` is global, so the
+  later caller takes over the credential callback; the earlier one is now told
+  rather than left waiting for a credential that will be delivered elsewhere.
+
+### Internal
+
+- Web `hostedDomain`/expiry/profile logic extracted to `src/web/session.ts`,
+  shared by fresh sign-in and cache reads so the two cannot drift.
 
 ## [0.4.0] - 2026-07-25
 

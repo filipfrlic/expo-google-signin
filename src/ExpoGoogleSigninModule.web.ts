@@ -7,7 +7,7 @@ import type {
   SignInResult,
 } from './types';
 import { loadGis } from './web/loadGis';
-import { decodeIdToken } from './web/decodeIdToken';
+import { sessionFromIdToken } from './web/session';
 import { writeCached, clearCached, readCached } from './web/storage';
 import { requestAccessToken, type OAuth2Namespace } from './web/tokenClient';
 import { GoogleSigninError } from './errors';
@@ -70,35 +70,22 @@ export const resolveCredential = (
   credential: string,
   config: ConfigureOptions
 ): { ok: true; result: SignInResult } | { ok: false; error: GoogleSigninError } => {
-  try {
-    const decoded = decodeIdToken(credential);
-    if (config.hostedDomain && decoded.hd !== config.hostedDomain) {
-      return {
-        ok: false,
-        error: new GoogleSigninError(
-          'ERR_NO_CREDENTIAL',
-          `hostedDomain mismatch: expected ${config.hostedDomain}, got ${decoded.hd ?? 'none'}`
-        ),
-      };
-    }
-    const user = {
-      id: decoded.sub,
-      email: decoded.email,
-      name: decoded.name ?? null,
-      givenName: decoded.given_name ?? null,
-      familyName: decoded.family_name ?? null,
-      photo: decoded.picture ?? null,
-    };
-    const result: SignInResult = { idToken: credential, user };
-    writeCached(result);
-    return { ok: true, result };
-  } catch (err) {
-    return {
-      ok: false,
-      error: new GoogleSigninError('ERR_UNKNOWN', (err as Error).message),
-    };
+  const outcome = sessionFromIdToken(credential, config);
+  if (outcome.ok) {
+    writeCached(outcome.result);
   }
+  return outcome;
 };
+
+/**
+ * `google.accounts.id.initialize` is global: a second call replaces the first
+ * caller's callback and nonce, so only one consumer can own GIS at a time.
+ * Whoever initializes last takes over, and the displaced owner is told so it
+ * fails loudly instead of waiting forever for a credential that will now be
+ * delivered to someone else — or, worse, resolving against a nonce it never
+ * asked for.
+ */
+let releaseCurrentOwner: (() => void) | undefined;
 
 /**
  * Initialize GIS with the options this package always sends, forwarding the
@@ -110,8 +97,11 @@ const initializeGis = (
   google: Google,
   config: ConfigureOptions,
   nonce: string | undefined,
-  onCredential: (credential: string) => void
+  onCredential: (credential: string) => void,
+  onSuperseded: () => void
 ): void => {
+  releaseCurrentOwner?.();
+  releaseCurrentOwner = onSuperseded;
   google.accounts.id.initialize({
     client_id: config.webClientId,
     callback: (response) => onCredential(response.credential),
@@ -120,6 +110,10 @@ const initializeGis = (
     auto_select: false,
   });
 };
+
+const SUPERSEDED =
+  'superseded by another Google Identity Services call — only one signIn() or ' +
+  'sign-in button can be active at a time';
 
 let configured: ConfigureOptions | undefined;
 
@@ -151,16 +145,26 @@ const signIn = async (options: SignInOptions): Promise<SignInResult> => {
   const { google, config } = await requireGis();
   return new Promise<SignInResult>((resolve, reject) => {
     let settled = false;
-    initializeGis(google, config, options.nonce, (credential) => {
-      if (settled) return;
-      settled = true;
-      const outcome = resolveCredential(credential, config);
-      if (outcome.ok) {
-        resolve(outcome.result);
-      } else {
-        reject(outcome.error);
+    initializeGis(
+      google,
+      config,
+      options.nonce,
+      (credential) => {
+        if (settled) return;
+        settled = true;
+        const outcome = resolveCredential(credential, config);
+        if (outcome.ok) {
+          resolve(outcome.result);
+        } else {
+          reject(outcome.error);
+        }
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        reject(new GoogleSigninError('ERR_UNKNOWN', `sign-in ${SUPERSEDED}`));
       }
-    });
+    );
     google.accounts.id.prompt((notification) => {
       if (settled) return;
       const code = mapMomentToCode(notification);
@@ -179,7 +183,9 @@ const signOut = async (): Promise<void> => {
 };
 
 const getCurrentUser = async (): Promise<SignInResult | null> => {
-  return readCached();
+  // Re-applies the hostedDomain gate: a session cached before the app was
+  // configured with one — or under a different one — is not a valid session now.
+  return readCached(configured ?? {});
 };
 
 const authorize = async (options: AuthorizeOptions): Promise<AuthorizationResult> => {
@@ -191,8 +197,10 @@ const authorize = async (options: AuthorizeOptions): Promise<AuthorizationResult
     clientId: config.webClientId,
     scopes: options.scopes,
     hostedDomain: config.hostedDomain,
-    // Pin consent to the signed-in account, matching what native does.
-    loginHint: readCached()?.user.email,
+    // A hint only — see the caveat on AuthorizationResult. Taken from the ID
+    // token rather than the cached user blob so it cannot be steered by
+    // whatever happens to be sitting in sessionStorage.
+    loginHint: readCached(config)?.user.email,
   });
 };
 
@@ -220,15 +228,26 @@ export const renderGoogleSignInButton = (
         );
         return;
       }
-      initializeGis(google, config, options.nonce, (credential) => {
-        if (unmounted) return;
-        const outcome = resolveCredential(credential, config);
-        if (outcome.ok) {
-          options.onSuccess(outcome.result);
-        } else {
-          options.onError?.(outcome.error);
+      initializeGis(
+        google,
+        config,
+        options.nonce,
+        (credential) => {
+          if (unmounted) return;
+          const outcome = resolveCredential(credential, config);
+          if (outcome.ok) {
+            options.onSuccess(outcome.result);
+          } else {
+            options.onError?.(outcome.error);
+          }
+        },
+        () => {
+          if (unmounted) return;
+          options.onError?.(
+            new GoogleSigninError('ERR_UNKNOWN', `sign-in button ${SUPERSEDED}`)
+          );
         }
-      });
+      );
       google.accounts.id.renderButton(element, {
         theme: options.theme,
         size: options.size,

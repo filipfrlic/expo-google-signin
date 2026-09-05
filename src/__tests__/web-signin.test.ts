@@ -12,6 +12,7 @@ import {
   flushAsync,
   harness,
   initializeFn,
+  loadButton,
   loadModule,
   makeJwt,
   promptFn,
@@ -262,5 +263,114 @@ describe('getCurrentUser', () => {
     const mod = loadModule();
     await expect(mod.getCurrentUser()).resolves.toBeNull();
     expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+});
+
+describe('getCurrentUser: token is the source of truth', () => {
+  const cache = (idToken: string, user: Record<string, unknown>) =>
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ idToken, user }));
+
+  const TAMPERED = {
+    id: 'attacker-sub',
+    email: 'attacker@evil.example',
+    name: 'Attacker',
+    givenName: null,
+    familyName: null,
+    photo: null,
+  };
+
+  it('re-derives the user from the ID token, ignoring a tampered cached user', async () => {
+    cache(
+      makeJwt({
+        sub: 'real-sub',
+        email: 'jane@example.com',
+        name: 'Jane Doe',
+        exp: farFutureExp,
+      }),
+      TAMPERED
+    );
+    const mod = loadModule();
+    const current = await mod.getCurrentUser();
+    expect(current?.user).toEqual({
+      id: 'real-sub',
+      email: 'jane@example.com',
+      name: 'Jane Doe',
+      givenName: null,
+      familyName: null,
+      photo: null,
+    });
+  });
+
+  it('returns null and clears storage when the cached token fails the hostedDomain check', async () => {
+    cache(
+      makeJwt({ sub: 'x', email: 'y@other.com', hd: 'other.com', exp: farFutureExp }),
+      TAMPERED
+    );
+    const mod = loadModule();
+    mod.configure({
+      webClientId: 'web.apps.googleusercontent.com',
+      hostedDomain: 'example.com',
+    });
+    await expect(mod.getCurrentUser()).resolves.toBeNull();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it('returns the cached session when the token hd matches the configured hostedDomain', async () => {
+    const jwt = makeJwt({
+      sub: 'x',
+      email: 'y@example.com',
+      hd: 'example.com',
+      exp: farFutureExp,
+    });
+    cache(jwt, TAMPERED);
+    const mod = loadModule();
+    mod.configure({
+      webClientId: 'web.apps.googleusercontent.com',
+      hostedDomain: 'example.com',
+    });
+    const current = await mod.getCurrentUser();
+    expect(current?.idToken).toBe(jwt);
+    expect(current?.user).toMatchObject({ id: 'x', email: 'y@example.com' });
+  });
+
+  it('returns null and clears storage when the cached token is malformed', async () => {
+    cache('not-a-jwt', TAMPERED);
+    const mod = loadModule();
+    await expect(mod.getCurrentUser()).resolves.toBeNull();
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+});
+
+describe('signIn: GIS takeover', () => {
+  it('rejects an in-flight signIn when a button re-initializes GIS', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    // Attach the handler up front: the takeover rejects synchronously, and an
+    // unhandled rejection would fail the run before the assertion is reached.
+    const rejection = mod.signIn({}).catch((e: Error) => e);
+    await flushAsync();
+
+    const renderGoogleSignInButton = loadButton();
+    renderGoogleSignInButton(document.createElement('div'), { onSuccess: jest.fn() });
+    await flushAsync();
+
+    expect(await rejection).toMatchObject({
+      name: 'GoogleSigninError',
+      code: 'ERR_UNKNOWN',
+    });
+  });
+
+  it('rejects the earlier signIn when a second signIn starts', async () => {
+    const mod = loadModule();
+    mod.configure({ webClientId: 'web.apps.googleusercontent.com' });
+    const rejection = mod.signIn({}).catch((e: Error) => e);
+    await flushAsync();
+    const second = mod.signIn({});
+    await flushAsync();
+
+    expect(await rejection).toMatchObject({ code: 'ERR_UNKNOWN' });
+
+    fireCredential(makeJwt({ sub: 'x', email: 'y@z.com', exp: farFutureExp }));
+    await expect(second).resolves.toMatchObject({ idToken: expect.any(String) });
   });
 });

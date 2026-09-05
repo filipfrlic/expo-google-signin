@@ -116,6 +116,8 @@ useEffect(() => {
 
 The return value is an `unmount` function that clears the element — drops straight into `useEffect`'s cleanup slot.
 
+Google Identity Services allows one active consumer per page, so a rendered button and an in-flight `signIn()` cannot coexist. Whichever starts last takes over; the other gets an `ERR_UNKNOWN` through `onError` (or a rejected promise) rather than hanging forever on a credential that will be delivered elsewhere. Pick one per screen.
+
 Calling this on iOS or Android throws `GoogleSigninError('ERR_UNKNOWN', ...)`; it's web-only. Use `signIn()` on native.
 
 Most production web apps render this button as the primary sign-in UI and treat One Tap as a silent fast-path optimization.
