@@ -71,6 +71,14 @@ const restored = await getCurrentUser(); // null if no cached session
 await signOut();
 ```
 
+> [!IMPORTANT]
+> `idToken` is the only signed artifact in that result. `user` is decoded from
+> its payload **without verifying the signature**, which no client can do on its
+> own — it is what you render, never what you authorize on. Send `idToken` to
+> your backend, verify it against Google's public keys (check `aud` and, if you
+> use it, `hd`), and read identity from the verified claims. See
+> [Verifying on your backend](#verifying-on-your-backend).
+
 ### With Supabase
 
 ```ts
@@ -93,8 +101,8 @@ await supabase.auth.signInWithIdToken({
 The same code path works on iOS, Android, and web. Differences worth knowing:
 
 - `signIn()` surfaces the platform's account chooser — Google's iOS sheet, Android's Credential Manager bottom sheet, or the web FedCM / One Tap prompt.
-- `getCurrentUser()` restores the cached session: native SDKs persist across app launches, web reads from `sessionStorage` (does not survive a tab close). On every platform the ID token's `exp` claim is checked; expired tokens resolve to `null`.
-- `signOut()` clears the SDK's cached account on native, and clears `sessionStorage` plus calls `disableAutoSelect()` on web.
+- `getCurrentUser()` restores the cached session: native SDKs persist across app launches, web reads from `sessionStorage` (does not survive a tab close). On every platform the ID token's `exp` claim is checked, the `hd` claim is re-checked against a configured `hostedDomain`, and the returned `user` is re-derived from the token itself — a session that fails any of those resolves to `null` and is dropped from the cache.
+- `signOut()` clears the SDK's cached account on native, and clears `sessionStorage` plus calls `disableAutoSelect()` on web. It does **not** revoke: an access token from `authorize()` stays valid at Google until it expires (~1h). To kill one immediately, call Google's `/revoke` endpoint from your backend.
 
 ### Web: rendered Sign-In button
 
@@ -184,6 +192,20 @@ Android's pin is held in memory, so a process restart clears it. Rather than aut
 
 > [!WARNING]
 > **Web cannot make this guarantee.** GIS `login_hint` is a hint: the user can still switch accounts inside the popup, and the token response carries no account, so the browser has no way to report which one granted. If your app cares — anything that writes to a user's Drive, reads their Gmail, or attributes data to an identity — confirm it server-side: call Google's `tokeninfo`/`userinfo` endpoint with the access token and compare its `sub` to the verified ID token's `sub`.
+
+## Verifying on your backend
+
+Everything this package hands you is client-side, so treat it that way. The `user` object, the `hd` domain gate, and the `exp` check are conveniences for rendering and for keeping obviously-unusable sessions out of your UI — a client can decode a JWT but cannot verify one, and anything running on the user's device or browser can be changed by whoever holds it.
+
+The single thing worth trusting is `idToken`, and only after your backend verifies it:
+
+1. Verify the signature against [Google's public keys](https://www.googleapis.com/oauth2/v3/certs) (use a library — `google-auth-library`, `google-auth`, or your provider's built-in verifier).
+2. Check `aud` is your web client ID and `iss` is `accounts.google.com` or `https://accounts.google.com`.
+3. Check `exp` has not passed.
+4. If you use `hostedDomain`, check the `hd` claim there too — the client-side check filters the UI, it does not enforce anything.
+5. Read the user's identity from the **verified claims** (`sub`, `email`), not from whatever the client sent alongside the token.
+
+If you hand `idToken` to Supabase, Firebase, or Auth0, they do all of this for you — that is what makes those integrations safe. Only roll it yourself if you own the backend.
 
 ## Errors
 

@@ -32,6 +32,15 @@ export const configure = (options: ConfigureOptions): void => {
   NativeModule.configure(options);
 };
 
+/**
+ * Clear the local session.
+ *
+ * This does not **revoke** anything: an access token already handed out by
+ * {@link authorize} stays valid at Google until it expires (about an hour), on
+ * every platform. If you need it dead immediately — a shared device, a "revoke
+ * access" affordance — call Google's `/revoke` endpoint from your backend as
+ * well.
+ */
 export const signOut = async (): Promise<void> => {
   try {
     await NativeModule.signOut();

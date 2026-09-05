@@ -41,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later caller takes over the credential callback; the earlier one is now told
   rather than left waiting for a credential that will be delivered elsewhere.
 
+### Documentation
+
+- New **Verifying on your backend** section, and an explicit warning that
+  `SignInResult.user` is decoded from an *unverified* JWT payload — display
+  data, not an authorization basis.
+- `AuthorizationResult` now documents that the granting account is guaranteed
+  only on iOS and Android; on web `login_hint` is a hint the user can override
+  inside the popup, so apps that care must confirm it server-side.
+- `signOut()` documents that it does not revoke already-issued access tokens.
+
 ### Internal
 
 - Web `hostedDomain`/expiry/profile logic extracted to `src/web/session.ts`,

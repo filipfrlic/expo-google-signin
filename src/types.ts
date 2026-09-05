@@ -1,3 +1,14 @@
+/**
+ * Profile fields for the signed-in account.
+ *
+ * **Display data, not proof of identity.** On Android and web these are decoded
+ * out of the ID token's payload *without verifying its signature*, which no
+ * client can do on its own. Treat them as what to render — never as the basis
+ * for granting access. Anything that matters must be decided by your backend
+ * after it verifies {@link SignInResult.idToken} against Google's public keys
+ * and checks the `aud` claim, and it should read identity from the verified
+ * claims rather than from anything the client sends alongside the token.
+ */
 export type GoogleUser = {
   /**
    * Stable Google account identifier (the OIDC `sub` claim).
@@ -17,8 +28,13 @@ export type GoogleUser = {
 };
 
 export type SignInResult = {
-  /** OIDC ID token (JWT). Send to your backend for verification. */
+  /**
+   * OIDC ID token (JWT). The only signed artifact here, and the only thing
+   * worth sending to your backend — verify it there, then read identity from
+   * the verified claims.
+   */
   idToken: string;
+  /** Decoded profile fields. Safe to render; see {@link GoogleUser}. */
   user: GoogleUser;
 };
 
@@ -39,6 +55,12 @@ export type ConfigureOptions = {
    * Enforced by the native SDK on iOS and Android. On web, GIS does not
    * pre-filter — the returned token's `hd` claim is checked after sign-in and
    * mismatches reject with `ERR_NO_CREDENTIAL`.
+   *
+   * `getCurrentUser()` re-checks the restored token's `hd` claim on every
+   * platform, so a session cached before this option was set — or under a
+   * different domain — resolves to `null` rather than coming back. As with
+   * every client-side check, it filters; it does not authenticate. Verify `hd`
+   * on your backend too.
    */
   hostedDomain?: string;
 };
