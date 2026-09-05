@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- CI workflow declares least-privilege `permissions: contents: read`, and
+  `npm audit fix` clears the fixable advisories in the dev toolchain.
 - Web `hostedDomain`/expiry/profile logic extracted to `src/web/session.ts`,
   shared by fresh sign-in and cache reads so the two cannot drift.
 
