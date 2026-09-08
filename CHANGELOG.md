@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-08
+
 ### Fixed
 
 - Android: the module builds under Android Gradle Plugin 9. AGP 9 ships built-in
@@ -26,8 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KotlinAndroidProjectExtension`. A matching `compileOptions` block pins the
   Java target to 17 alongside it, so the two stay consistent instead of
   following whatever the consumer's toolchain resolves.
-
-[#1]: https://github.com/filipfrlic/expo-google-signin/pull/1
 
 ## [0.5.0] - 2026-09-05
 
@@ -215,7 +215,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   like Supabase, and `hostedDomain` restriction on native.
 - New architecture support.
 
-[Unreleased]: https://github.com/filipfrlic/expo-google-signin/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/filipfrlic/expo-google-signin/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/filipfrlic/expo-google-signin/compare/v0.5.0...v0.5.1
+[#1]: https://github.com/filipfrlic/expo-google-signin/pull/1
 [0.5.0]: https://github.com/filipfrlic/expo-google-signin/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/filipfrlic/expo-google-signin/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/filipfrlic/expo-google-signin/compare/v0.2.2...v0.3.0
