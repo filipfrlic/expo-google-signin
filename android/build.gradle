@@ -19,8 +19,19 @@ android {
         targetSdk rootProject.ext.targetSdkVersion
     }
 
-    kotlinOptions {
-        jvmTarget = '17'
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// `android.kotlinOptions` is registered only by kotlin-android, which the guard
+// above skips under AGP 9 — the block would fail with "Could not find method
+// kotlinOptions()". `kotlin.compilerOptions` resolves on both paths: KGP and
+// AGP's built-in Kotlin each register `kotlin` as a KotlinAndroidProjectExtension.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

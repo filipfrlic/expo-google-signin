@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Android: the module builds under Android Gradle Plugin 9. AGP 9 ships built-in
+  Kotlin support and registers the `kotlin` extension itself, so the
+  unconditional `apply plugin: 'kotlin-android'` failed configuration with
+  "Cannot add extension with name 'kotlin'" — the package could not be built at
+  all in an AGP 9 project. It is now applied only when nothing has registered
+  that extension yet, which also covers AGP 10, where the
+  `android.builtInKotlin=false` opt-out is removed. Thanks to
+  [@gabrieldonadel](https://github.com/gabrieldonadel) ([#1]).
+- Android: the Kotlin JVM target moved from `android.kotlinOptions` to the
+  top-level `kotlin.compilerOptions` DSL. `android.kotlinOptions` is registered
+  only by `kotlin-android`, which the guard above skips under AGP 9, so the
+  block would have failed with "Could not find method kotlinOptions()" — the
+  same build, one line later. `kotlin.compilerOptions` resolves on both paths,
+  because KGP and AGP's built-in Kotlin each register `kotlin` as a
+  `KotlinAndroidProjectExtension`. A matching `compileOptions` block pins the
+  Java target to 17 alongside it, so the two stay consistent instead of
+  following whatever the consumer's toolchain resolves.
+
+[#1]: https://github.com/filipfrlic/expo-google-signin/pull/1
+
 ## [0.5.0] - 2026-09-05
 
 ### Security
